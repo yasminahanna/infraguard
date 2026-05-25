@@ -1,0 +1,21 @@
+{
+  "camera_id": "a",
+  "road_segment_id": "segment_12",
+  "timestamp": "2026-04-10T14:30:00Z",
+  "location": {
+    "lat": 33.9001,
+    "lon": 35.4832
+  },
+  "frames_base64": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9"
+  ],
+  "metadata": {}
+}

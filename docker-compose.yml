@@ -1,0 +1,39 @@
+services:
+  eep-gateway:
+    build: ./services/eep_gateway
+    container_name: infraguard-eep
+    ports:
+      - "8000:8000"
+    environment:
+      API_KEY: ${API_KEY}
+      DETECTION_IEP_URL: http://detection-iep:8001
+      HOTSPOT_IEP_URL: http://hotspot-iep:8002
+      RECOMMENDER_IEP_URL: http://recommender-iep:8003
+      REQUEST_TIMEOUT_SECONDS: ${REQUEST_TIMEOUT_SECONDS}
+      MAX_FRAMES_PER_REQUEST: ${MAX_FRAMES_PER_REQUEST}
+    depends_on:
+      - detection-iep
+      - hotspot-iep
+      - recommender-iep
+
+  detection-iep:
+    build: ./services/detection_iep
+    container_name: infraguard-detection-iep
+    ports:
+      - "8001:8001"
+
+  hotspot-iep:
+    build: ./services/hotspot_iep
+    container_name: infraguard-hotspot-iep
+    ports:
+      - "8002:8002"
+
+  recommender-iep:
+    build: ./services/recommender_iep
+    container_name: infraguard-recommender-iep
+    ports:
+      - "8003:8003"
+    environment:
+      LLM_PROVIDER: ${LLM_PROVIDER}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS}
