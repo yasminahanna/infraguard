@@ -22,7 +22,7 @@ A rule-based recommender is easier to test but weaker for nuanced infrastructure
 
 - LLM output validity rate.
 - JSON schema validation failure rate.
-- Latency p50/p95.
+- Latency p50 and p95.
 - Recommendation consistency on golden inputs.
 
 ## Tradeoff 2: Cloud LLM API vs Local Ollama
@@ -33,7 +33,7 @@ Start with OpenAI API for the primary LLM.
 
 ### Why
 
-It is easier to deploy reliably in a cloud environment and avoids heavy GPU/CPU memory requirements.
+It is easier to deploy reliably in a cloud environment and avoids heavy GPU or CPU memory requirements.
 
 ### Rejected Option
 
@@ -48,9 +48,9 @@ Ollama increases infrastructure burden and may complicate cloud deployment under
 - Average LLM latency.
 - Failure rate.
 - Deployment cost.
-- Memory/CPU requirements.
+- Memory and CPU requirements.
 
-## Tradeoff 3: Micro-batch Input vs Real-Time Streaming
+## Tradeoff 3: Micro-Batch Input vs Real-Time Streaming
 
 ### Choice
 
@@ -106,7 +106,7 @@ An emergency static fallback exists only at the EEP level if the Recommender IEP
 
 ### Final Intended Choice
 
-Replace this with a classifier fallback trained on real public traffic/crash data.
+Replace this with a classifier fallback trained on real public traffic or crash data.
 
 ### Why
 
@@ -118,3 +118,28 @@ A classifier fallback is more defensible and testable than static fallback logic
 - Confidence calibration.
 - Failure cases.
 - Comparison with LLM recommendation outputs.
+
+## Tradeoff 6: Placeholder Detection vs Immediate Full Computer Vision
+
+### Current Choice
+
+The current Detection IEP uses placeholder event generation while the service architecture, tests, and orchestration are built first.
+
+### Why
+
+This allows the distributed system, contracts, validation, Dockerization, and integration tests to stabilize before adding heavier computer vision logic.
+
+### Rejected Option
+
+Start directly with a full YOLO or tracking pipeline before service orchestration.
+
+### Why Rejected
+
+Starting with computer vision first risks spending too much time on model setup before satisfying architecture, testing, deployment, and observability requirements.
+
+### Evidence To Collect
+
+- Detection model latency once implemented.
+- Event confidence distribution.
+- Behavior detection examples.
+- Comparison against simpler baselines.

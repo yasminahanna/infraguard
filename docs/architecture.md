@@ -6,11 +6,11 @@ InfraGuard is a production-oriented AI engineering system for road safety risk a
 
 ## High-Level Flow
 
-Client / Demo User
-→ EEP Gateway
-→ Detection IEP
-→ Hotspot IEP
-→ Recommender IEP
+Client / Demo User  
+→ EEP Gateway  
+→ Detection IEP  
+→ Hotspot IEP  
+→ Recommender IEP  
 → Final response
 
 ## Services
@@ -80,3 +80,16 @@ InfraGuard intentionally separates concerns:
 - The EEP only orchestrates.
 
 This improves testability, deployment flexibility, observability, and fault isolation.
+
+## Architecture Rationale
+
+The course requires an External Endpoint and at least two Internal Endpoints. InfraGuard exceeds this minimum by implementing three independent Internal Endpoints.
+
+The services are intentionally different:
+
+- Detection IEP performs event detection and computer vision-oriented inference.
+- Hotspot IEP performs temporal and risk scoring logic.
+- Recommender IEP performs LLM-based infrastructure recommendation.
+- EEP Gateway handles public access, security, validation, and orchestration.
+
+This makes the system easier to explain, test, observe, deploy, and extend.

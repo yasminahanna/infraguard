@@ -4,7 +4,7 @@
 
 InfraGuard uses multiple test levels.
 
-## Unit / API Tests
+## Unit and API Tests
 
 Implemented:
 
@@ -70,3 +70,46 @@ Implemented or planned:
 - Invalid location.
 - Too many frames.
 - Invalid confidence score.
+
+## Current Test Commands
+
+Detection IEP:
+
+    cd services\detection_iep
+    pytest
+
+Hotspot IEP:
+
+    cd services\hotspot_iep
+    pytest
+
+Recommender IEP:
+
+    cd services\recommender_iep
+    pytest
+
+Integration tests:
+
+    cd C:\Users\yasmi\infraguard
+    pytest tests\integration
+
+## Current Test Status
+
+Current local test status:
+
+- Detection IEP: 4 tests passing.
+- Hotspot IEP: 5 tests passing.
+- Recommender IEP: 5 tests passing.
+- EEP integration: 3 tests passing.
+
+## Regression Protection Plan
+
+The regression suite will be expanded with golden examples.
+
+Each golden example will check:
+
+- whether the request is accepted,
+- whether detection output remains within expected bounds,
+- whether hotspot score remains within a tolerance band,
+- whether recommendation category is acceptable,
+- whether latency remains below a defined threshold.
