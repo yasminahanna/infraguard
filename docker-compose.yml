@@ -36,4 +36,29 @@ services:
     environment:
       LLM_PROVIDER: ${LLM_PROVIDER}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      LLM_MODEL: ${LLM_MODEL}
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS}
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: infraguard-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - eep-gateway
+      - detection-iep
+      - hotspot-iep
+      - recommender-iep
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: infraguard-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    depends_on:
+      - prometheus

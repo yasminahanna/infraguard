@@ -1,0 +1,27 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: "eep-gateway"
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - "eep-gateway:8000"
+
+  - job_name: "detection-iep"
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - "detection-iep:8001"
+
+  - job_name: "hotspot-iep"
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - "hotspot-iep:8002"
+
+  - job_name: "recommender-iep"
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - "recommender-iep:8003"
