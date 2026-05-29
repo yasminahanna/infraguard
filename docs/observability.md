@@ -120,3 +120,44 @@ Next steps:
 - Add p50 and p95 panels.
 - Add service-specific counters.
 - Add fallback and failure panels.
+
+## Local Observability Stack
+
+InfraGuard runs Prometheus and Grafana through Docker Compose.
+
+Prometheus:
+
+    http://localhost:9090
+
+Grafana:
+
+    http://localhost:3000
+
+Default local Grafana credentials:
+
+    username: admin
+    password: admin
+
+Prometheus targets:
+
+- `eep-gateway:8000`
+- `detection-iep:8001`
+- `hotspot-iep:8002`
+- `recommender-iep:8003`
+
+Grafana data source URL:
+
+    http://prometheus:9090
+
+Initial dashboard:
+
+- InfraGuard Overview
+
+Initial dashboard panels:
+
+- EEP total requests.
+- Detection IEP requests.
+- Hotspot IEP requests.
+- Recommender IEP requests.
+- Downstream IEP failures.
+- Hotspot risk levels.
