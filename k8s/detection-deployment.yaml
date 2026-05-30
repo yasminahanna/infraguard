@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: detection-iep
+  namespace: infraguard
+  labels:
+    app: detection-iep
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: detection-iep
+  template:
+    metadata:
+      labels:
+        app: detection-iep
+    spec:
+      containers:
+        - name: detection-iep
+          image: infraguard-detection-iep:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8001
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 20

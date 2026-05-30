@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recommender-iep
+  namespace: infraguard
+  labels:
+    app: recommender-iep
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: recommender-iep
+  template:
+    metadata:
+      labels:
+        app: recommender-iep
+    spec:
+      containers:
+        - name: recommender-iep
+          image: infraguard-recommender-iep:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8003
+          env:
+            - name: LLM_PROVIDER
+              valueFrom:
+                configMapKeyRef:
+                  name: infraguard-config
+                  key: LLM_PROVIDER
+            - name: LLM_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: infraguard-config
+                  key: LLM_MODEL
+            - name: LLM_TIMEOUT_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: infraguard-config
+                  key: LLM_TIMEOUT_SECONDS
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: infraguard-secrets
+                  key: OPENAI_API_KEY
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8003
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8003
+            initialDelaySeconds: 10
+            periodSeconds: 20

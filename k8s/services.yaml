@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: eep-gateway
+  namespace: infraguard
+  labels:
+    app: eep-gateway
+spec:
+  type: ClusterIP
+  selector:
+    app: eep-gateway
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: detection-iep
+  namespace: infraguard
+  labels:
+    app: detection-iep
+spec:
+  type: ClusterIP
+  selector:
+    app: detection-iep
+  ports:
+    - name: http
+      port: 8001
+      targetPort: 8001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hotspot-iep
+  namespace: infraguard
+  labels:
+    app: hotspot-iep
+spec:
+  type: ClusterIP
+  selector:
+    app: hotspot-iep
+  ports:
+    - name: http
+      port: 8002
+      targetPort: 8002
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: recommender-iep
+  namespace: infraguard
+  labels:
+    app: recommender-iep
+spec:
+  type: ClusterIP
+  selector:
+    app: recommender-iep
+  ports:
+    - name: http
+      port: 8003
+      targetPort: 8003

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: infraguard-config
+  namespace: infraguard
+data:
+  DETECTION_IEP_URL: "http://detection-iep:8001"
+  HOTSPOT_IEP_URL: "http://hotspot-iep:8002"
+  RECOMMENDER_IEP_URL: "http://recommender-iep:8003"
+  LLM_PROVIDER: "openai"
+  LLM_MODEL: "gpt-4o-mini"
+  LLM_TIMEOUT_SECONDS: "12"
+  REQUEST_TIMEOUT_SECONDS: "10"
+  MAX_FRAMES_PER_REQUEST: "8"

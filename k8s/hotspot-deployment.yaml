@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hotspot-iep
+  namespace: infraguard
+  labels:
+    app: hotspot-iep
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hotspot-iep
+  template:
+    metadata:
+      labels:
+        app: hotspot-iep
+    spec:
+      containers:
+        - name: hotspot-iep
+          image: infraguard-hotspot-iep:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8002
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 10
+            periodSeconds: 20

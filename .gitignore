@@ -18,3 +18,4 @@ data/raw/
 data/private/
 
 *.log
+k8s/secrets.yaml

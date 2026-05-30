@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eep-gateway
+  namespace: infraguard
+  labels:
+    app: eep-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: eep-gateway
+  template:
+    metadata:
+      labels:
+        app: eep-gateway
+    spec:
+      containers:
+        - name: eep-gateway
+          image: infraguard-eep:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: infraguard-secrets
+                  key: API_KEY
+            - name: DETECTION_IEP_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: infraguard-config
+                  key: DETECTION_IEP_URL
+            - name: HOTSPOT_IEP_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: infraguard-config
+                  key: HOTSPOT_IEP_URL
+            - name: RECOMMENDER_IEP_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: infraguard-config
+                  key: RECOMMENDER_IEP_URL
+            - name: REQUEST_TIMEOUT_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: infraguard-config
+                  key: REQUEST_TIMEOUT_SECONDS
+            - name: MAX_FRAMES_PER_REQUEST
+              valueFrom:
+                configMapKeyRef:
+                  name: infraguard-config
+                  key: MAX_FRAMES_PER_REQUEST
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 20
