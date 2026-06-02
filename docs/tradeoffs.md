@@ -119,8 +119,31 @@ A classifier fallback is more defensible and testable than static fallback logic
 - Failure cases.
 - Comparison with LLM recommendation outputs.
 
-## Tradeoff 6: Placeholder Detection vs Immediate Full Computer Vision
+## Tradeoff 6: YOLO + CLIP vs Custom-Trained Event Model
 
+### Choice
+
+InfraGuard currently uses YOLOv8n for vehicle detection and CLIP zero-shot classification for event labels.
+
+### Why
+
+This gives real AI inference quickly without requiring a custom labeled dataset before the system architecture is complete.
+
+### Rejected Option
+
+Training a custom event classifier immediately.
+
+### Why Rejected
+
+A custom event classifier requires a reliable labeled dataset. Training without real labels would be misleading, and the project should not rely on synthetic labels for final claims.
+
+### Evidence To Collect
+
+- Vehicle count examples from real images.
+- CLIP event classification outputs.
+- Detection latency after model warm-up.
+- Failure cases where CLIP misclassifies a scene.
+- Comparison with a future dataset-trained classifier.
 ### Current Choice
 
 The current Detection IEP uses placeholder event generation while the service architecture, tests, and orchestration are built first.

@@ -40,8 +40,11 @@ Responsibilities:
 
 Current implementation:
 
-- Placeholder event detection for service integration.
-- Future implementation will use computer vision models and OpenCV-based behavior analysis.
+- Decodes real base64 image frames.
+- Uses YOLOv8n for vehicle detection.
+- Uses CLIP zero-shot image classification for scene-level event labels.
+- Produces structured traffic-risk events from model outputs.
+- Falls back to controlled demo output only when frames are not valid images.
 
 ### Hotspot IEP
 
