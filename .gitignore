@@ -19,3 +19,8 @@ data/private/
 
 *.log
 k8s/secrets.yaml
+
+samples/*.jpg
+samples/*.jpeg
+samples/*.png
+samples/*.mp4
