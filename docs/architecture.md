@@ -60,18 +60,14 @@ Responsibilities:
 ### Recommender IEP
 
 Internal Endpoint 3.
+Current implementation:
 
-Responsibilities:
-
-- Consume detection and hotspot evidence.
-- Use an LLM to recommend infrastructure interventions.
-- Validate strict JSON output.
-- Return intervention, priority, supporting actions, explanation, and confidence.
-
-Fallback plan:
-
-- Current emergency fallback is handled by the EEP only if the recommender service is unavailable.
-- Planned fallback is a classifier trained on real public road safety or traffic data.
+- Uses OpenAI as the primary LLM recommender.
+- Supports optional web RAG through Tavily.
+- Builds search queries from event types, hotspot risk, trend, and location metadata.
+- Passes retrieved web context into the LLM prompt.
+- Returns retrieved context in the recommender response when available.
+- Falls back through the EEP if the recommender service is unavailable.
 
 ## Why This Is Not a Monolith
 

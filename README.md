@@ -83,6 +83,8 @@ Port:
 
     8003
 
+The Recommender IEP also supports optional web RAG. When enabled, it searches for relevant public road-safety context using the event types, hotspot risk, and location metadata, then includes that retrieved context in the LLM prompt.
+
 ## Current Implementation Status
 
 Implemented:
