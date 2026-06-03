@@ -1,0 +1,38 @@
+﻿{
+  "camera_id": "aub_gate_01",
+  "road_segment_id": "segment_12",
+  "detection": {
+    "vehicle_count": 6,
+    "events_detected": 3,
+    "mean_confidence": 0.743,
+    "event_types": [
+      "unsafe_proximity",
+      "high_density",
+      "reckless_driving"
+    ]
+  },
+  "hotspot": {
+    "hotspot_score": 0.79,
+    "risk_level": "high",
+    "trend": "increasing",
+    "cluster_id": "cluster_012",
+    "evidence": [
+      {
+        "label": "event_count",
+        "value": "3"
+      },
+      {
+        "label": "weighted_risk_score",
+        "value": "0.79"
+      }
+    ]
+  },
+  "metadata": {
+    "speed_limit_kmh": 50,
+    "weather": "clear",
+    "time_of_day": "evening",
+    "city": "Beirut",
+    "country": "Lebanon",
+    "location_name": "AUB Gate area"
+  }
+}

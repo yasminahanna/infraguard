@@ -64,7 +64,12 @@ def require_api_key(x_api_key: str | None) -> None:
         raise HTTPException(status_code=401, detail="Invalid or missing API key.")
 
 
-async def post_json(client: httpx.AsyncClient, url: str, payload: dict, service_name: str) -> dict:
+async def post_json(
+    client: httpx.AsyncClient,
+    url: str,
+    payload: dict,
+    service_name: str,
+) -> dict:
     try:
         response = await client.post(url, json=payload)
         response.raise_for_status()
@@ -115,15 +120,13 @@ async def analyze(
     hotspot_url = os.getenv("HOTSPOT_IEP_URL", "http://hotspot-iep:8002")
     recommender_url = os.getenv("RECOMMENDER_IEP_URL", "http://recommender-iep:8003")
 
-    timeout_seconds = float(os.getenv("REQUEST_TIMEOUT_SECONDS", "10"))
+    timeout_seconds = float(os.getenv("REQUEST_TIMEOUT_SECONDS", "180"))
 
     async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-        detection_payload = payload.model_dump()
-
         detection_result = await post_json(
             client=client,
             url=f"{detection_url}/detect",
-            payload=detection_payload,
+            payload=payload.model_dump(),
             service_name="detection_iep",
         )
 
@@ -184,7 +187,7 @@ async def analyze(
                     "priority": hotspot_result["risk_level"],
                     "supporting_actions": [
                         "continue_monitoring",
-                        "review_segment_manually"
+                        "review_segment_manually",
                     ],
                     "explanation": (
                         "The LLM recommender service was unavailable. InfraGuard returned an "
@@ -195,13 +198,14 @@ async def analyze(
                     "evidence_used": [
                         f"hotspot_score={hotspot_result['hotspot_score']}",
                         f"risk_level={hotspot_result['risk_level']}",
-                        f"trend={hotspot_result['trend']}"
+                        f"trend={hotspot_result['trend']}",
                     ],
-                    "confidence": 0.25
+                    "confidence": 0.25,
                 },
+                "retrieved_context": [],
                 "fallback_used": True,
                 "fallback_reason": exc.detail,
-                "latency_ms": 0
+                "latency_ms": 0,
             }
 
     latency_ms = int((perf_counter() - start) * 1000)
