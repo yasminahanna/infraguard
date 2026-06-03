@@ -8,6 +8,7 @@ from openai import OpenAI
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from pydantic import BaseModel, Field, ValidationError
 from starlette.responses import Response
+from app.web_search import retrieve_web_context
 
 
 app = FastAPI(
@@ -92,10 +93,11 @@ class RecommendationResponse(BaseModel):
     provider: Literal["openai"]
     model: str
     recommendation: Recommendation
+    retrieved_context: list[dict]
     latency_ms: int
 
 
-def build_prompt(payload: RecommendationRequest) -> str:
+def build_prompt(payload: RecommendationRequest, retrieved_context: list[dict]) -> str:
     return f"""
 You are an AI road-safety infrastructure advisor for a smart-city engineering team.
 
@@ -152,6 +154,12 @@ Hotspot summary:
 Road metadata:
 {json.dumps(payload.metadata, indent=2)}
 
+Retrieved web context:
+{json.dumps(retrieved_context, indent=2)}
+- Use retrieved web context only when it is relevant.
+- Do not claim something is legally required unless the retrieved source clearly supports it.
+- If web context is useful, mention the source title or URL in evidence_used.
+
 Decision rules:
 - If risk_level is high and speeding-like behavior exists, strongly consider install_speed_camera or increase_enforcement.
 - If lane violations exist, strongly consider repaint_lane_markings.
@@ -161,7 +169,9 @@ Decision rules:
 """.strip()
 
 
-def call_openai_recommender(payload: RecommendationRequest) -> Recommendation:
+
+
+def call_openai_recommender(payload: RecommendationRequest, retrieved_context: list[dict]) -> Recommendation:
     api_key = os.getenv("OPENAI_API_KEY")
     model = os.getenv("LLM_MODEL", "gpt-4o-mini")
     timeout_seconds = float(os.getenv("LLM_TIMEOUT_SECONDS", "12"))
@@ -175,7 +185,7 @@ def call_openai_recommender(payload: RecommendationRequest) -> Recommendation:
 
     client = OpenAI(api_key=api_key, timeout=timeout_seconds)
 
-    prompt = build_prompt(payload)
+    prompt = build_prompt(payload, retrieved_context)
 
     try:
         response = client.chat.completions.create(
@@ -241,8 +251,14 @@ def metrics() -> Response:
 def recommend(payload: RecommendationRequest) -> RecommendationResponse:
     start = perf_counter()
     REQUEST_COUNT.inc()
+    retrieved_context = retrieve_web_context(
+    event_types=payload.detection.event_types,
+    risk_level=payload.hotspot.risk_level,
+    trend=payload.hotspot.trend,
+    metadata=payload.metadata,
+    )
 
-    recommendation = call_openai_recommender(payload)
+    recommendation = call_openai_recommender(payload, retrieved_context)
 
     RECOMMENDATION_COUNT.labels(
         intervention=recommendation.primary_intervention
@@ -258,4 +274,5 @@ def recommend(payload: RecommendationRequest) -> RecommendationResponse:
         model=os.getenv("LLM_MODEL", "gpt-4o-mini"),
         recommendation=recommendation,
         latency_ms=latency_ms,
+        retrieved_context=retrieved_context,
     )
