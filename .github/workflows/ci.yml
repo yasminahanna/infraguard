@@ -85,6 +85,7 @@ jobs:
       - name: Run Recommender tests
         run: pytest
 
+
   docker-build:
     name: Docker Build Check
     runs-on: ubuntu-latest
@@ -95,3 +96,19 @@ jobs:
 
       - name: Build services
         run: docker compose build
+  
+  eval-data-check:
+    name: Golden Eval Data Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate golden recommender cases
+        run: python evals/validate_golden_cases.py
