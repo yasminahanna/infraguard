@@ -234,3 +234,16 @@ Planned:
 ## Project Direction
 
 InfraGuard is being developed as a production-style AI system, not a notebook demo or thin API wrapper. The final version will include cloud deployment, observability dashboards, Kubernetes manifests, lifecycle tracking, dataset-backed evaluation, and a polished live demo.
+
+## Fine-Tuning Plan
+
+InfraGuard does not fine-tune the recommender model yet.
+
+The planned approach is:
+
+- use RAG for current and location-specific facts,
+- use golden evaluation examples to measure recommendation quality,
+- fine-tune only after collecting enough high-quality reviewed examples,
+- use fine-tuning to improve recommendation style, JSON consistency, evidence use, and uncertainty wording.
+
+Fine-tuning will not replace RAG.

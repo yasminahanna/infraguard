@@ -1,0 +1,127 @@
+[
+  {
+    "case_id": "high_speeding_hotspot",
+    "input": {
+      "detection": {
+        "vehicle_count": 8,
+        "events_detected": 3,
+        "mean_confidence": 0.82,
+        "event_types": [
+          "possible_speeding",
+          "unsafe_proximity",
+          "reckless_driving"
+        ]
+      },
+      "hotspot": {
+        "hotspot_score": 0.81,
+        "risk_level": "high",
+        "trend": "increasing"
+      },
+      "metadata": {
+        "speed_limit_kmh": 50,
+        "weather": "clear",
+        "time_of_day": "evening",
+        "city": "Beirut",
+        "country": "Lebanon"
+      }
+    },
+    "expected": {
+      "acceptable_primary_interventions": [
+        "install_speed_camera",
+        "increase_enforcement",
+        "add_warning_signage"
+      ],
+      "minimum_priority": "high",
+      "must_use_evidence": [
+        "hotspot_score",
+        "risk_level",
+        "possible_speeding"
+      ],
+      "must_not_claim": [
+        "legally required",
+        "guaranteed crash reduction"
+      ]
+    }
+  },
+  {
+    "case_id": "lane_violation_medium_risk",
+    "input": {
+      "detection": {
+        "vehicle_count": 5,
+        "events_detected": 2,
+        "mean_confidence": 0.71,
+        "event_types": [
+          "lane_violation",
+          "high_density"
+        ]
+      },
+      "hotspot": {
+        "hotspot_score": 0.52,
+        "risk_level": "medium",
+        "trend": "stable"
+      },
+      "metadata": {
+        "speed_limit_kmh": 40,
+        "weather": "clear",
+        "time_of_day": "day",
+        "city": "Beirut",
+        "country": "Lebanon"
+      }
+    },
+    "expected": {
+      "acceptable_primary_interventions": [
+        "repaint_lane_markings",
+        "add_warning_signage",
+        "review_signal_timing"
+      ],
+      "minimum_priority": "medium",
+      "must_use_evidence": [
+        "lane_violation",
+        "risk_level"
+      ],
+      "must_not_claim": [
+        "legally required",
+        "confirmed cause"
+      ]
+    }
+  },
+  {
+    "case_id": "low_risk_monitoring",
+    "input": {
+      "detection": {
+        "vehicle_count": 2,
+        "events_detected": 0,
+        "mean_confidence": 0.58,
+        "event_types": []
+      },
+      "hotspot": {
+        "hotspot_score": 0.12,
+        "risk_level": "low",
+        "trend": "stable"
+      },
+      "metadata": {
+        "speed_limit_kmh": 50,
+        "weather": "clear",
+        "time_of_day": "day",
+        "city": "Beirut",
+        "country": "Lebanon"
+      }
+    },
+    "expected": {
+      "acceptable_primary_interventions": [
+        "no_action_monitor",
+        "add_warning_signage"
+      ],
+      "minimum_priority": "low",
+      "must_use_evidence": [
+        "hotspot_score",
+        "risk_level"
+      ],
+      "must_not_claim": [
+        "urgent",
+        "high risk",
+        "legally required"
+      ]
+    }
+  }
+]
