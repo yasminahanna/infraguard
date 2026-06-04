@@ -335,6 +335,21 @@ Validation constraints:
 - `risk_level`: must be `low`, `medium`, or `high`.
 - `trend`: must be `stable`, `increasing`, or `decreasing`.
 
+
+The recommender response may include retrieved context:
+
+    "retrieved_context": [
+      {
+        "source_type": "web",
+        "query": "road safety guidelines unsafe proximity high risk traffic calming",
+        "title": "Example source title",
+        "url": "https://example.com",
+        "content": "Short retrieved snippet..."
+      }
+    ]
+
+If web search is disabled, `retrieved_context` is an empty list.
+
 ## Error Behavior
 
 ### Invalid API Key

@@ -59,6 +59,9 @@ Required:
     OPENAI_API_KEY=...
     LLM_MODEL=gpt-4o-mini
     LLM_TIMEOUT_SECONDS=12
+    WEB_SEARCH_ENABLED=false
+    TAVILY_API_KEY=
+    WEB_SEARCH_MAX_RESULTS=3
 
 ## Secrets Management
 

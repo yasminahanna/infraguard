@@ -69,6 +69,24 @@ Current implementation:
 - Returns retrieved context in the recommender response when available.
 - Falls back through the EEP if the recommender service is unavailable.
 
+### RAG Support
+
+The Recommender IEP supports optional web retrieval before calling the LLM.
+
+When enabled, the service builds search queries from:
+
+- detected event types,
+- hotspot risk level,
+- hotspot trend,
+- city,
+- country,
+- location name,
+- road metadata.
+
+Retrieved web context is passed into the LLM prompt and returned in the API response for transparency.
+
+If web search is disabled or no search key is available, the recommender still works without retrieved context.
+
 ## Why This Is Not a Monolith
 
 InfraGuard intentionally separates concerns:
