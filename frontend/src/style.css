@@ -450,6 +450,13 @@ select {
   line-height: 1.6;
 }
 
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: #020617;
+  color: #e5e7eb;
+  border: 1px solid #1e293b;
+}
+
 @media (max-width: 1050px) {
   .app-shell {
     grid-template-columns: 1fr;

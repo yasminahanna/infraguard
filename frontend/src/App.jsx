@@ -1,5 +1,12 @@
 import { useMemo, useState } from "react";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import {
+  Circle,
+  CircleMarker,
+  MapContainer,
+  Marker,
+  Popup,
+  TileLayer,
+} from "react-leaflet";
 import dailyReport from "../../samples/daily_report_sample.json";
 
 function riskClass(riskLevel) {
@@ -12,6 +19,12 @@ function riskLabel(riskLevel) {
   if (riskLevel === "high") return "High Risk";
   if (riskLevel === "medium") return "Medium Risk";
   return "Low Risk";
+}
+
+function hotspotColor(riskLevel) {
+  if (riskLevel === "high") return "#ef4444";
+  if (riskLevel === "medium") return "#f59e0b";
+  return "#22c55e";
 }
 
 function App() {
@@ -289,9 +302,9 @@ function App() {
               <p className="long-report-text">
                 In production, this dashboard will read the latest generated
                 daily report from the backend endpoint instead of static sample
-                data. The intended flow is 24/7 CCTV sampling, detection,
-                event storage, daily hotspot aggregation, LLM/RAG reporting,
-                and dashboard display.
+                data. The intended flow is 24/7 CCTV sampling, detection, event
+                storage, daily hotspot aggregation, LLM/RAG reporting, and
+                dashboard display.
               </p>
             </div>
           </section>
@@ -307,7 +320,7 @@ function MapPanel({ hotspots, riskFilter, setRiskFilter, setSelectedSegmentId })
       <div className="panel-header">
         <div>
           <h3>City Hotspot Map</h3>
-          <p>Click a marker to inspect a road segment.</p>
+          <p>Red dots are incidents. Circles show hotspot areas.</p>
         </div>
 
         <select
@@ -327,23 +340,71 @@ function MapPanel({ hotspots, riskFilter, setRiskFilter, setSelectedSegmentId })
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {hotspots.map((hotspot) => (
-          <Marker
-            key={hotspot.road_segment_id}
-            position={[hotspot.location.lat, hotspot.location.lon]}
-            eventHandlers={{
-              click: () => setSelectedSegmentId(hotspot.road_segment_id),
-            }}
-          >
-            <Popup>
-              <strong>{hotspot.location_name}</strong>
-              <br />
-              Risk: {hotspot.risk_level}
-              <br />
-              Score: {hotspot.hotspot_score}
-            </Popup>
-          </Marker>
-        ))}
+        {hotspots.map((hotspot) => {
+          const color = hotspotColor(hotspot.risk_level);
+
+          return (
+            <div key={hotspot.road_segment_id}>
+              <Circle
+                center={[hotspot.location.lat, hotspot.location.lon]}
+                radius={hotspot.radius_meters || 120}
+                pathOptions={{
+                  color,
+                  fillColor: color,
+                  fillOpacity: 0.12,
+                  weight: 2,
+                }}
+                eventHandlers={{
+                  click: () => setSelectedSegmentId(hotspot.road_segment_id),
+                }}
+              />
+
+              <Marker
+                position={[hotspot.location.lat, hotspot.location.lon]}
+                eventHandlers={{
+                  click: () => setSelectedSegmentId(hotspot.road_segment_id),
+                }}
+              >
+                <Popup>
+                  <strong>{hotspot.location_name}</strong>
+                  <br />
+                  Hotspot area
+                  <br />
+                  Risk: {hotspot.risk_level}
+                  <br />
+                  Score: {hotspot.hotspot_score}
+                </Popup>
+              </Marker>
+
+              {(hotspot.incidents || []).map((incident) => (
+                <CircleMarker
+                  key={incident.incident_id}
+                  center={[incident.lat, incident.lon]}
+                  radius={7}
+                  pathOptions={{
+                    color: "#991b1b",
+                    fillColor: "#ef4444",
+                    fillOpacity: 0.9,
+                    weight: 2,
+                  }}
+                  eventHandlers={{
+                    click: () => setSelectedSegmentId(hotspot.road_segment_id),
+                  }}
+                >
+                  <Popup>
+                    <strong>{incident.event_type}</strong>
+                    <br />
+                    Severity: {incident.severity}
+                    <br />
+                    Confidence: {incident.confidence}
+                    <br />
+                    Time: {incident.timestamp}
+                  </Popup>
+                </CircleMarker>
+              ))}
+            </div>
+          );
+        })}
       </MapContainer>
     </div>
   );
@@ -375,6 +436,15 @@ function HotspotDetails({ hotspot }) {
           <span>Events</span>
           <strong>{hotspot.event_count}</strong>
         </div>
+      </div>
+
+      <div className="section">
+        <h4>Incident Points</h4>
+        <p className="long-report-text">
+          This hotspot contains {(hotspot.incidents || []).length} mapped
+          incident points. Red dots on the map represent individual detected
+          events, while the circle represents the hotspot area.
+        </p>
       </div>
 
       <div className="section">
