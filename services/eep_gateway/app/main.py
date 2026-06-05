@@ -1,10 +1,13 @@
+import json
 import os
 import uuid
+from pathlib import Path
 from time import perf_counter
 from typing import Literal
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from pydantic import BaseModel, Field
 from starlette.responses import Response
@@ -15,6 +18,29 @@ app = FastAPI(
     description="External Endpoint: validates requests and orchestrates Detection, Hotspot, and Recommender IEPs.",
     version="0.1.0",
 )
+
+
+def get_frontend_origins() -> list[str]:
+    origins_text = os.getenv(
+        "FRONTEND_ORIGINS",
+        "http://localhost:5173,http://localhost:3000",
+    )
+
+    return [
+        origin.strip()
+        for origin in origins_text.split(",")
+        if origin.strip()
+    ]
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_frontend_origins(),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 REQUEST_COUNT = Counter(
     "eep_requests_total",
@@ -102,6 +128,23 @@ def health() -> dict:
 @app.get("/metrics")
 def metrics() -> Response:
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+@app.get("/v1/reports/latest")
+def latest_report() -> dict:
+    report_path = Path("sample_data/daily_report_sample.json")
+
+    if not report_path.exists():
+        return {
+            "status": "placeholder",
+            "message": (
+                "Latest daily report endpoint placeholder. "
+                "In production, this will return the latest generated 24-hour CCTV safety report."
+            ),
+        }
+
+    with report_path.open("r", encoding="utf-8") as file:
+        return json.load(file)
 
 
 @app.post("/v1/analyze", response_model=AnalyzeResponse)
