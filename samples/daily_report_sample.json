@@ -1,0 +1,147 @@
+{
+  "report_id": "daily_2026_04_10_beirut_demo",
+  "city": "Beirut",
+  "country": "Lebanon",
+  "generated_at": "2026-04-11T00:05:00Z",
+  "report_window": {
+    "start": "2026-04-10T00:00:00Z",
+    "end": "2026-04-10T23:59:59Z"
+  },
+  "summary": {
+    "total_cameras": 4,
+    "total_road_segments": 4,
+    "total_events_detected": 38,
+    "high_risk_segments": 1,
+    "medium_risk_segments": 2,
+    "low_risk_segments": 1
+  },
+  "hotspots": [
+    {
+      "road_segment_id": "segment_12",
+      "camera_id": "aub_gate_01",
+      "location_name": "AUB Gate area",
+      "location": {
+        "lat": 33.9001,
+        "lon": 35.4832
+      },
+      "hotspot_score": 0.81,
+      "risk_level": "high",
+      "trend": "increasing",
+      "event_count": 14,
+      "top_event_types": [
+        "unsafe_proximity",
+        "high_density",
+        "reckless_driving"
+      ],
+      "recommendation": {
+        "primary_intervention": "add_warning_signage",
+        "priority": "high",
+        "supporting_actions": [
+          "increase_enforcement",
+          "review_signal_timing"
+        ],
+        "explanation": "This segment shows repeated unsafe proximity and density events. A high-priority intervention is recommended for administrator review.",
+        "evidence_used": [
+          "hotspot_score=0.81",
+          "risk_level=high",
+          "trend=increasing",
+          "event_count=14"
+        ],
+        "confidence": 0.76
+      }
+    },
+    {
+      "road_segment_id": "segment_07",
+      "camera_id": "hamra_02",
+      "location_name": "Hamra main street",
+      "location": {
+        "lat": 33.8955,
+        "lon": 35.4827
+      },
+      "hotspot_score": 0.57,
+      "risk_level": "medium",
+      "trend": "stable",
+      "event_count": 9,
+      "top_event_types": [
+        "high_density",
+        "lane_violation"
+      ],
+      "recommendation": {
+        "primary_intervention": "repaint_lane_markings",
+        "priority": "medium",
+        "supporting_actions": [
+          "add_warning_signage",
+          "monitor_peak_hours"
+        ],
+        "explanation": "This segment has medium risk with repeated density and lane-related events. Lane marking review is recommended.",
+        "evidence_used": [
+          "hotspot_score=0.57",
+          "risk_level=medium",
+          "top_event_types=high_density,lane_violation"
+        ],
+        "confidence": 0.68
+      }
+    },
+    {
+      "road_segment_id": "segment_03",
+      "camera_id": "corniche_01",
+      "location_name": "Corniche road",
+      "location": {
+        "lat": 33.9018,
+        "lon": 35.4742
+      },
+      "hotspot_score": 0.46,
+      "risk_level": "medium",
+      "trend": "decreasing",
+      "event_count": 8,
+      "top_event_types": [
+        "possible_speeding"
+      ],
+      "recommendation": {
+        "primary_intervention": "increase_enforcement",
+        "priority": "medium",
+        "supporting_actions": [
+          "add_warning_signage",
+          "continue_monitoring"
+        ],
+        "explanation": "Possible speeding events were detected, but trend is decreasing. Enforcement review and continued monitoring are recommended.",
+        "evidence_used": [
+          "hotspot_score=0.46",
+          "risk_level=medium",
+          "trend=decreasing"
+        ],
+        "confidence": 0.61
+      }
+    },
+    {
+      "road_segment_id": "segment_01",
+      "camera_id": "downtown_01",
+      "location_name": "Downtown intersection",
+      "location": {
+        "lat": 33.8938,
+        "lon": 35.5018
+      },
+      "hotspot_score": 0.19,
+      "risk_level": "low",
+      "trend": "stable",
+      "event_count": 7,
+      "top_event_types": [
+        "normal_traffic"
+      ],
+      "recommendation": {
+        "primary_intervention": "no_action_monitor",
+        "priority": "low",
+        "supporting_actions": [
+          "continue_monitoring"
+        ],
+        "explanation": "This segment is currently low risk. No immediate infrastructure intervention is recommended.",
+        "evidence_used": [
+          "hotspot_score=0.19",
+          "risk_level=low",
+          "trend=stable"
+        ],
+        "confidence": 0.72
+      }
+    }
+  ]
+}
