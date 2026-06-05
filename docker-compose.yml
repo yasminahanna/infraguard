@@ -12,6 +12,10 @@ services:
       REQUEST_TIMEOUT_SECONDS: ${REQUEST_TIMEOUT_SECONDS}
       MAX_FRAMES_PER_REQUEST: ${MAX_FRAMES_PER_REQUEST}
       FRONTEND_ORIGINS: ${FRONTEND_ORIGINS}
+      REQUIRE_SUPABASE_AUTH: ${REQUIRE_SUPABASE_AUTH}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_ADMIN_EMAILS: ${SUPABASE_ADMIN_EMAILS}
     depends_on:
       - detection-iep
       - hotspot-iep
@@ -44,7 +48,12 @@ services:
       WEB_SEARCH_MAX_RESULTS: ${WEB_SEARCH_MAX_RESULTS}
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:8000
+        VITE_SUPABASE_URL: ${SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
     container_name: infraguard-frontend
     ports:
       - "5173:80"

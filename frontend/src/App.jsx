@@ -8,7 +8,7 @@ import {
   TileLayer,
 } from "react-leaflet";
 import { getLatestReport } from "./api";
-import { supabase } from "./supabaseClient";
+import { supabase, supabaseConfigMissing } from "./supabaseClient";
 
 function riskClass(riskLevel) {
   if (riskLevel === "high") return "risk-high";
@@ -29,6 +29,14 @@ function hotspotColor(riskLevel) {
 }
 
 function App() {
+  if (supabaseConfigMissing) {
+    return (
+      <div className="loading-screen">
+        Supabase configuration is missing. Check VITE_SUPABASE_URL and
+        VITE_SUPABASE_ANON_KEY.
+      </div>
+    );
+  }
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [dailyReport, setDailyReport] = useState(null);

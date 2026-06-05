@@ -90,6 +90,85 @@ def require_api_key(x_api_key: str | None) -> None:
         raise HTTPException(status_code=401, detail="Invalid or missing API key.")
 
 
+def supabase_auth_required() -> bool:
+    return os.getenv("REQUIRE_SUPABASE_AUTH", "false").lower() == "true"
+
+
+def get_allowed_admin_emails() -> set[str]:
+    emails_text = os.getenv("SUPABASE_ADMIN_EMAILS", "")
+
+    return {
+        email.strip().lower()
+        for email in emails_text.split(",")
+        if email.strip()
+    }
+
+
+async def verify_supabase_admin(authorization: str | None) -> dict:
+    if not supabase_auth_required():
+        return {
+            "auth_required": False,
+            "user": None,
+        }
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=401,
+            detail="Missing Supabase bearer token.",
+        )
+
+    access_token = authorization.replace("Bearer ", "", 1).strip()
+
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_anon_key = os.getenv("SUPABASE_ANON_KEY")
+
+    if not supabase_url or not supabase_anon_key:
+        raise HTTPException(
+            status_code=500,
+            detail="Supabase backend auth is enabled but Supabase configuration is missing.",
+        )
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(
+                f"{supabase_url}/auth/v1/user",
+                headers={
+                    "apikey": supabase_anon_key,
+                    "Authorization": f"Bearer {access_token}",
+                },
+            )
+            response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired Supabase token.",
+        ) from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Could not verify Supabase token.",
+        ) from exc
+
+    user = response.json()
+    user_email = str(user.get("email", "")).lower()
+
+    allowed_admin_emails = get_allowed_admin_emails()
+
+    if allowed_admin_emails and user_email not in allowed_admin_emails:
+        raise HTTPException(
+            status_code=403,
+            detail="Authenticated user is not an approved InfraGuard admin.",
+        )
+
+    return {
+        "auth_required": True,
+        "user": {
+            "id": user.get("id"),
+            "email": user.get("email"),
+        },
+    }
+
+
 async def post_json(
     client: httpx.AsyncClient,
     url: str,
@@ -131,12 +210,17 @@ def metrics() -> Response:
 
 
 @app.get("/v1/reports/latest")
-def latest_report() -> dict:
+async def latest_report(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict:
+    auth_info = await verify_supabase_admin(authorization)
+
     report_path = Path("sample_data/daily_report_sample.json")
 
     if not report_path.exists():
         return {
             "status": "placeholder",
+            "auth": auth_info,
             "message": (
                 "Latest daily report endpoint placeholder. "
                 "In production, this will return the latest generated 24-hour CCTV safety report."
@@ -144,7 +228,11 @@ def latest_report() -> dict:
         }
 
     with report_path.open("r", encoding="utf-8") as file:
-        return json.load(file)
+        report = json.load(file)
+
+    report["auth"] = auth_info
+
+    return report
 
 
 @app.post("/v1/analyze", response_model=AnalyzeResponse)
