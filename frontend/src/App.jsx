@@ -8,6 +8,7 @@ import {
   TileLayer,
 } from "react-leaflet";
 import { getLatestReport } from "./api";
+import { supabase } from "./supabaseClient";
 
 function riskClass(riskLevel) {
   if (riskLevel === "high") return "risk-high";
@@ -28,6 +29,8 @@ function hotspotColor(riskLevel) {
 }
 
 function App() {
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [dailyReport, setDailyReport] = useState(null);
   const [reportSource, setReportSource] = useState("sample");
   const [activePage, setActivePage] = useState("overview");
@@ -35,12 +38,31 @@ function App() {
   const [riskFilter, setRiskFilter] = useState("all");
 
   useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setAuthLoading(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, newSession) => {
+        setSession(newSession);
+      }
+    );
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!session) return;
+
     getLatestReport().then(({ report, source }) => {
       setDailyReport(report);
       setReportSource(source);
       setSelectedSegmentId(report.hotspots[0].road_segment_id);
     });
-  }, []);
+  }, [session]);
 
   const filteredHotspots = useMemo(() => {
     if (!dailyReport) return [];
@@ -50,6 +72,20 @@ function App() {
       (hotspot) => hotspot.risk_level === riskFilter
     );
   }, [dailyReport, riskFilter]);
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    setDailyReport(null);
+    setSelectedSegmentId(null);
+  }
+
+  if (authLoading) {
+    return <div className="loading-screen">Checking admin session...</div>;
+  }
+
+  if (!session) {
+    return <LoginScreen />;
+  }
 
   if (!dailyReport || !selectedSegmentId) {
     return <div className="loading-screen">Loading InfraGuard dashboard...</div>;
@@ -102,8 +138,15 @@ function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <span>Report ID</span>
+          <span>Signed in as</span>
+          <strong>{session.user.email}</strong>
+
+          <span className="footer-label">Report ID</span>
           <strong>{dailyReport.report_id}</strong>
+
+          <button className="logout-button" onClick={handleLogout}>
+            Log out
+          </button>
         </div>
       </aside>
 
@@ -136,25 +179,14 @@ function App() {
         {activePage === "overview" && (
           <>
             <section className="summary-grid">
-              <div className="metric-card">
-                <span>Total Cameras</span>
-                <strong>{dailyReport.summary.total_cameras}</strong>
-              </div>
-
-              <div className="metric-card">
-                <span>Road Segments</span>
-                <strong>{dailyReport.summary.total_road_segments}</strong>
-              </div>
-
-              <div className="metric-card">
-                <span>Events Detected</span>
-                <strong>{dailyReport.summary.total_events_detected}</strong>
-              </div>
-
-              <div className="metric-card danger">
-                <span>High Risk Segments</span>
-                <strong>{dailyReport.summary.high_risk_segments}</strong>
-              </div>
+              <MetricCard label="Total Cameras" value={dailyReport.summary.total_cameras} />
+              <MetricCard label="Road Segments" value={dailyReport.summary.total_road_segments} />
+              <MetricCard label="Events Detected" value={dailyReport.summary.total_events_detected} />
+              <MetricCard
+                label="High Risk Segments"
+                value={dailyReport.summary.high_risk_segments}
+                danger
+              />
             </section>
 
             <section className="content-grid">
@@ -248,24 +280,21 @@ function App() {
               </div>
             </div>
 
-            <div className="section">
-              <h4>Executive Summary</h4>
+            <ReportSection title="Executive Summary">
               <p className="long-report-text">
                 {dailyReport.daily_report.executive_summary}
               </p>
-            </div>
+            </ReportSection>
 
-            <div className="section">
-              <h4>Key Findings</h4>
+            <ReportSection title="Key Findings">
               <ul className="report-list">
                 {dailyReport.daily_report.key_findings.map((finding) => (
                   <li key={finding}>{finding}</li>
                 ))}
               </ul>
-            </div>
+            </ReportSection>
 
-            <div className="section">
-              <h4>Recommended Admin Actions</h4>
+            <ReportSection title="Recommended Admin Actions">
               <ul className="report-list">
                 {dailyReport.daily_report.recommended_admin_actions.map(
                   (action) => (
@@ -273,17 +302,15 @@ function App() {
                   )
                 )}
               </ul>
-            </div>
+            </ReportSection>
 
-            <div className="section">
-              <h4>Model Limitation Note</h4>
+            <ReportSection title="Model Limitation Note">
               <p className="long-report-text">
                 {dailyReport.daily_report.model_limitation_note}
               </p>
-            </div>
+            </ReportSection>
 
-            <div className="section">
-              <h4>Segment Recommendations</h4>
+            <ReportSection title="Segment Recommendations">
               <div className="recommendation-list">
                 {dailyReport.hotspots.map((hotspot) => (
                   <div className="mini-card" key={hotspot.road_segment_id}>
@@ -293,7 +320,7 @@ function App() {
                   </div>
                 ))}
               </div>
-            </div>
+            </ReportSection>
           </section>
         )}
 
@@ -313,8 +340,7 @@ function App() {
               <HealthCard service="Recommender IEP" status="Fallback Ready" />
             </div>
 
-            <div className="section">
-              <h4>Production Readiness</h4>
+            <ReportSection title="Production Readiness">
               <p className="long-report-text">
                 In production, this dashboard will read the latest generated
                 daily report from the backend endpoint instead of static sample
@@ -322,10 +348,101 @@ function App() {
                 storage, daily hotspot aggregation, LLM/RAG reporting, and
                 dashboard display.
               </p>
-            </div>
+            </ReportSection>
           </section>
         )}
       </main>
+    </div>
+  );
+}
+
+function LoginScreen() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setError("");
+
+    const { error: loginError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (loginError) {
+      setError(loginError.message);
+    }
+
+    setIsSubmitting(false);
+  }
+
+  return (
+    <div className="login-page">
+      <div className="login-card">
+        <div className="brand login-brand">
+          <div className="brand-icon">IG</div>
+          <div>
+            <h1>InfraGuard</h1>
+            <p>Admin-only access</p>
+          </div>
+        </div>
+
+        <h2>Admin Login</h2>
+        <p className="login-note">
+          Sign in with the admin account created in Supabase Auth.
+        </p>
+
+        <form onSubmit={handleSubmit} className="login-form">
+          <label>
+            Email
+            <input
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              autoComplete="email"
+              required
+            />
+          </label>
+
+          <label>
+            Password
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="current-password"
+              required
+            />
+          </label>
+
+          {error && <div className="login-error">{error}</div>}
+
+          <button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? "Signing in..." : "Enter Dashboard"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ label, value, danger = false }) {
+  return (
+    <div className={`metric-card ${danger ? "danger" : ""}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function ReportSection({ title, children }) {
+  return (
+    <div className="section">
+      <h4>{title}</h4>
+      {children}
     </div>
   );
 }
@@ -454,17 +571,15 @@ function HotspotDetails({ hotspot }) {
         </div>
       </div>
 
-      <div className="section">
-        <h4>Incident Points</h4>
+      <ReportSection title="Incident Points">
         <p className="long-report-text">
           This hotspot contains {(hotspot.incidents || []).length} mapped
           incident points. Red dots on the map represent individual detected
           events, while the circle represents the hotspot area.
         </p>
-      </div>
+      </ReportSection>
 
-      <div className="section">
-        <h4>Detected Event Types</h4>
+      <ReportSection title="Detected Event Types">
         <div className="tag-list">
           {hotspot.top_event_types.map((eventType) => (
             <span className="tag" key={eventType}>
@@ -472,7 +587,7 @@ function HotspotDetails({ hotspot }) {
             </span>
           ))}
         </div>
-      </div>
+      </ReportSection>
 
       <div className="section recommendation-box">
         <div className="recommendation-header">
