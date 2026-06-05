@@ -174,6 +174,17 @@ Integration tests:
     cd C:\Users\yasmi\infraguard
     pytest tests\integration
 
+Deployed E2E test:
+
+    pytest tests\e2e
+
+This test is skipped unless these environment variables are set:
+
+    DEPLOYED_EEP_URL
+    DEPLOYED_API_KEY
+
+After cloud deployment, these variables allow the test suite to verify the hosted public EEP endpoint.
+
 Current passing tests:
 
 - Detection IEP: 4 passing.

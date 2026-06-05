@@ -29,10 +29,17 @@ Implemented:
 
 ## End-to-End Deployment Test
 
-Planned:
+Implemented placeholder:
 
-- A test that calls the deployed public cloud endpoint.
-- It will verify that the deployed system works outside local Docker.
+- `tests/e2e/test_deployed_eep.py`
+
+Current behavior:
+
+- skipped unless `DEPLOYED_EEP_URL` and `DEPLOYED_API_KEY` are set.
+
+Final behavior:
+
+- after deployment, the test will call the hosted EEP `/v1/analyze` endpoint and verify that the deployed system returns detection, hotspot, and recommendation outputs.
 
 ## Golden Dataset Regression Tests
 
