@@ -112,6 +112,8 @@ Planned:
 - Cloud deployment.
 - MLflow or equivalent lifecycle tracking.
 
+
+
 ## Local Setup
 
 Requirements:
@@ -258,3 +260,38 @@ The planned approach is:
 - use fine-tuning to improve recommendation style, JSON consistency, evidence use, and uncertainty wording.
 
 Fine-tuning will not replace RAG.
+
+## Admin Dashboard
+
+InfraGuard includes a React admin dashboard for city traffic safety monitoring.
+
+Current dashboard features:
+
+- Supabase Auth admin login,
+- city hotspot map,
+- red incident dots for individual detected events,
+- hotspot circles around incident clusters,
+- daily report page,
+- hotspot ranking table,
+- fallback/LLM status warning,
+- backend report loading through `/v1/reports/latest`.
+
+The dashboard is designed for the final 24/7 CCTV workflow:
+
+CCTV streams  
+→ sampled detection  
+→ event storage  
+→ daily hotspot aggregation  
+→ daily LLM/RAG report  
+→ admin dashboard
+
+The dashboard currently supports sample daily report data while the backend daily report generator is still being prepared.
+
+## Authentication
+
+The dashboard uses Supabase Auth for real admin login.
+
+Backend report access can be protected with Supabase token verification by setting:
+
+```env
+REQUIRE_SUPABASE_AUTH=true
