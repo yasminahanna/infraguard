@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Circle,
   CircleMarker,
@@ -7,7 +7,7 @@ import {
   Popup,
   TileLayer,
 } from "react-leaflet";
-import dailyReport from "../../samples/daily_report_sample.json";
+import { getLatestReport } from "./api";
 
 function riskClass(riskLevel) {
   if (riskLevel === "high") return "risk-high";
@@ -28,19 +28,32 @@ function hotspotColor(riskLevel) {
 }
 
 function App() {
+  const [dailyReport, setDailyReport] = useState(null);
+  const [reportSource, setReportSource] = useState("sample");
   const [activePage, setActivePage] = useState("overview");
-  const [selectedSegmentId, setSelectedSegmentId] = useState(
-    dailyReport.hotspots[0].road_segment_id
-  );
+  const [selectedSegmentId, setSelectedSegmentId] = useState(null);
   const [riskFilter, setRiskFilter] = useState("all");
 
+  useEffect(() => {
+    getLatestReport().then(({ report, source }) => {
+      setDailyReport(report);
+      setReportSource(source);
+      setSelectedSegmentId(report.hotspots[0].road_segment_id);
+    });
+  }, []);
+
   const filteredHotspots = useMemo(() => {
+    if (!dailyReport) return [];
     if (riskFilter === "all") return dailyReport.hotspots;
 
     return dailyReport.hotspots.filter(
       (hotspot) => hotspot.risk_level === riskFilter
     );
-  }, [riskFilter]);
+  }, [dailyReport, riskFilter]);
+
+  if (!dailyReport || !selectedSegmentId) {
+    return <div className="loading-screen">Loading InfraGuard dashboard...</div>;
+  }
 
   const selectedHotspot =
     dailyReport.hotspots.find(
@@ -107,6 +120,9 @@ function App() {
           <div className="topbar-actions">
             <span className="live-dot"></span>
             <span>Monitoring active</span>
+            <span className="source-pill">
+              {reportSource === "backend" ? "Backend data" : "Sample data"}
+            </span>
           </div>
         </header>
 
