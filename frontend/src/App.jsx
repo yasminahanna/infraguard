@@ -57,7 +57,7 @@ function App() {
   useEffect(() => {
     if (!session) return;
 
-    getLatestReport().then(({ report, source }) => {
+    getLatestReport(session.access_token).then(({ report, source }) => {
       setDailyReport(report);
       setReportSource(source);
       setSelectedSegmentId(report.hotspots[0].road_segment_id);
@@ -179,9 +179,18 @@ function App() {
         {activePage === "overview" && (
           <>
             <section className="summary-grid">
-              <MetricCard label="Total Cameras" value={dailyReport.summary.total_cameras} />
-              <MetricCard label="Road Segments" value={dailyReport.summary.total_road_segments} />
-              <MetricCard label="Events Detected" value={dailyReport.summary.total_events_detected} />
+              <MetricCard
+                label="Total Cameras"
+                value={dailyReport.summary.total_cameras}
+              />
+              <MetricCard
+                label="Road Segments"
+                value={dailyReport.summary.total_road_segments}
+              />
+              <MetricCard
+                label="Events Detected"
+                value={dailyReport.summary.total_events_detected}
+              />
               <MetricCard
                 label="High Risk Segments"
                 value={dailyReport.summary.high_risk_segments}
