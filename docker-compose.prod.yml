@@ -1,0 +1,152 @@
+# Production compose for the Azure VM deployment.
+#
+# Differences from docker-compose.yml (local dev):
+#   - ONLY the EEP gateway (8000) and the frontend (80) publish ports to the host.
+#     The IEPs (detection/hotspot/recommender) and Prometheus/Grafana stay INTERNAL
+#     on infraguard-net and are NOT reachable from the public internet.
+#   - restart: unless-stopped on every service (survives reboots / crashes).
+#   - REQUIRE_SUPABASE_AUTH defaults to true (admin-gated dashboard in the cloud).
+#   - The frontend is built with VITE_API_BASE_URL = the public EEP URL (PUBLIC_EEP_URL).
+#
+# Usage on the VM:
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+#
+# If VM memory is tight, omit observability:
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build \
+#     eep-gateway detection-iep hotspot-iep recommender-iep frontend
+
+services:
+  eep-gateway:
+    build: ./services/eep_gateway
+    container_name: infraguard-eep
+    restart: unless-stopped
+    ports:
+      - "8000:8000"                       # PUBLIC — the only backend port exposed
+    environment:
+      API_KEY: ${API_KEY}
+      DETECTION_IEP_URL: http://detection-iep:8001
+      HOTSPOT_IEP_URL: http://hotspot-iep:8002
+      RECOMMENDER_IEP_URL: http://recommender-iep:8003
+      REQUEST_TIMEOUT_SECONDS: ${REQUEST_TIMEOUT_SECONDS}
+      MAX_FRAMES_PER_REQUEST: ${MAX_FRAMES_PER_REQUEST}
+      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS}
+      REQUIRE_SUPABASE_AUTH: ${REQUIRE_SUPABASE_AUTH:-true}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_ADMIN_EMAILS: ${SUPABASE_ADMIN_EMAILS}
+    volumes:
+      - report_store:/app/sample_data
+    depends_on:
+      - detection-iep
+      - hotspot-iep
+      - recommender-iep
+    networks:
+      infraguard-net:
+        aliases:
+          - eep-gateway
+
+  detection-iep:
+    build: ./services/detection_iep
+    container_name: infraguard-detection-iep
+    restart: unless-stopped
+    # NO ports: internal only (heaviest service — YOLO + CLIP)
+    networks:
+      infraguard-net:
+        aliases:
+          - detection-iep
+
+  hotspot-iep:
+    build: ./services/hotspot_iep
+    container_name: infraguard-hotspot-iep
+    restart: unless-stopped
+    # NO ports: internal only
+    networks:
+      infraguard-net:
+        aliases:
+          - hotspot-iep
+
+  recommender-iep:
+    build: ./services/recommender_iep
+    container_name: infraguard-recommender-iep
+    restart: unless-stopped
+    # NO ports: internal only
+    environment:
+      LLM_PROVIDER: ${LLM_PROVIDER}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      LLM_MODEL: ${LLM_MODEL}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS}
+      WEB_SEARCH_ENABLED: ${WEB_SEARCH_ENABLED}
+      TAVILY_API_KEY: ${TAVILY_API_KEY}
+      WEB_SEARCH_MAX_RESULTS: ${WEB_SEARCH_MAX_RESULTS}
+      HOTSPOT_IEP_URL: http://hotspot-iep:8002
+      EVENTS_PATH: /app/samples/events_sample.json
+      REPORT_STORE_PATH: /app/sample_data/daily_report_sample.json
+    volumes:
+      - report_store:/app/sample_data
+      - ./samples:/app/samples:ro
+    depends_on:
+      - hotspot-iep
+    networks:
+      infraguard-net:
+        aliases:
+          - recommender-iep
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: ${PUBLIC_EEP_URL}     # e.g. http://<vm-public-ip>:8000
+        VITE_SUPABASE_URL: ${SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+    container_name: infraguard-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"                            # PUBLIC — admin dashboard
+    depends_on:
+      - eep-gateway
+    networks:
+      infraguard-net:
+        aliases:
+          - frontend
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: infraguard-prometheus
+    restart: unless-stopped
+    # NO ports: internal only. View via SSH tunnel if needed:
+    #   ssh -L 9090:localhost:9090 <user>@<vm-ip>  (then publish 9090 temporarily) — or
+    #   docker compose exec prometheus wget -qO- localhost:9090/...  for spot checks.
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - eep-gateway
+      - detection-iep
+      - hotspot-iep
+      - recommender-iep
+    networks:
+      infraguard-net:
+        aliases:
+          - prometheus
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: infraguard-grafana
+    restart: unless-stopped
+    # NO ports: internal only (do NOT expose admin/admin publicly). Use an SSH tunnel:
+    #   ssh -L 3000:localhost:3000 <user>@<vm-ip>   — requires temporarily publishing 3000.
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    depends_on:
+      - prometheus
+    networks:
+      infraguard-net:
+        aliases:
+          - grafana
+
+volumes:
+  report_store:
+
+networks:
+  infraguard-net:
+    name: infraguard-net
