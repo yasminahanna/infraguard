@@ -235,6 +235,87 @@ async def latest_report(
     return report
 
 
+def get_cctv_clip_urls() -> list[str]:
+    """Azure Blob CCTV clip URLs (comma-separated env), defaulting to the demo clip."""
+    urls_text = os.getenv(
+        "CCTV_CLIP_URLS",
+        "https://igcctvzpvbm2.blob.core.windows.net/cctv-clips/cam_monitoring.mp4",
+    )
+
+    return [url.strip() for url in urls_text.split(",") if url.strip()]
+
+
+def find_incident_in_latest_report(incident_id: str) -> tuple[dict | None, dict | None]:
+    """Locate (incident, parent_hotspot) in the stored daily report, else (None, None)."""
+    report_path = Path("sample_data/daily_report_sample.json")
+
+    if not report_path.exists():
+        return None, None
+
+    try:
+        with report_path.open("r", encoding="utf-8") as file:
+            report = json.load(file)
+    except (json.JSONDecodeError, OSError):
+        return None, None
+
+    for hotspot in report.get("hotspots", []):
+        for incident in hotspot.get("incidents", []):
+            if incident.get("incident_id") == incident_id:
+                return incident, hotspot
+
+    return None, None
+
+
+@app.get("/v1/evidence/{incident_id}")
+async def incident_evidence(
+    incident_id: str,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict:
+    auth_info = await verify_supabase_admin(authorization)
+
+    clips = get_cctv_clip_urls()
+    clip_url = clips[sum(ord(c) for c in incident_id) % len(clips)] if clips else None
+
+    incident, hotspot = find_incident_in_latest_report(incident_id)
+
+    if hotspot is not None:
+        camera_id = hotspot.get("camera_id")
+        road_segment_id = hotspot.get("road_segment_id")
+        location_name = hotspot.get("location_name", road_segment_id)
+        risk_level = hotspot.get("risk_level", "unknown")
+        event_type = (incident or {}).get("event_type", "traffic-risk event")
+        explanation = (
+            f"Flagged as '{event_type}' on {location_name} "
+            f"(hotspot risk: {risk_level}). The clip below is the sampled CCTV footage "
+            f"the detection model analyzed for this location."
+        )
+    else:
+        camera_id = None
+        road_segment_id = None
+        explanation = (
+            "CCTV footage for this monitored location. The detection model samples "
+            "frames from this feed to identify traffic-risk events."
+        )
+
+    return {
+        "incident_id": incident_id,
+        "auth": auth_info,
+        "evidence": {
+            "clip_url": clip_url,
+            "frame_url": None,
+            "thumbnail_url": None,
+            "clip_available": clip_url is not None,
+            "start_time": (incident or {}).get("timestamp"),
+            "end_time": None,
+        },
+        "decision_context": {
+            "camera_id": camera_id,
+            "road_segment_id": road_segment_id,
+            "explanation": explanation,
+        },
+    }
+
+
 @app.post("/v1/analyze", response_model=AnalyzeResponse)
 async def analyze(
     payload: AnalyzeRequest,

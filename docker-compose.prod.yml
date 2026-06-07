@@ -34,6 +34,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       SUPABASE_ADMIN_EMAILS: ${SUPABASE_ADMIN_EMAILS}
+      CCTV_CLIP_URLS: ${CCTV_CLIP_URLS:-}
     volumes:
       - report_store:/app/sample_data
     depends_on:
@@ -108,6 +109,26 @@ services:
       infraguard-net:
         aliases:
           - frontend
+
+  stream-ingestor:
+    build: ./services/stream_ingestor
+    container_name: infraguard-stream-ingestor
+    restart: unless-stopped
+    environment:
+      EEP_URL: http://eep-gateway:8000
+      API_KEY: ${API_KEY}
+      SOURCE_URL: ${INGEST_SOURCE_URL:-https://igcctvzpvbm2.blob.core.windows.net/cctv-clips/cam_monitoring.mp4}
+      INGEST_INTERVAL_SECONDS: ${INGEST_INTERVAL_SECONDS:-30}
+      INGEST_LOCATION_NAME: ${INGEST_LOCATION_NAME:-Live CCTV feed}
+      LIVE_FEED_PATH: /app/sample_data/live_feed.json
+    volumes:
+      - report_store:/app/sample_data
+    depends_on:
+      - eep-gateway
+    networks:
+      infraguard-net:
+        aliases:
+          - stream-ingestor
 
   prometheus:
     image: prom/prometheus:v2.54.1
