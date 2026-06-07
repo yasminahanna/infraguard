@@ -7,7 +7,12 @@ import {
   Popup,
   TileLayer,
 } from "react-leaflet";
-import { getIncidentEvidence, getLatestReport } from "./api";
+import {
+  getIncidentEvidence,
+  getLatestReport,
+  getLiveFeed,
+  submitFeedback,
+} from "./api";
 import { supabase, supabaseConfigMissing } from "./supabaseClient";
 
 function riskClass(riskLevel) {
@@ -73,6 +78,7 @@ function App() {
   const [selectedEvidence, setSelectedEvidence] = useState(null);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
   const [evidenceError, setEvidenceError] = useState("");
+  const [liveFeed, setLiveFeed] = useState(null);
 
   useEffect(() => {
     if (supabaseConfigMissing || !supabase) {
@@ -107,6 +113,25 @@ function App() {
         setSelectedSegmentId(report.hotspots[0].road_segment_id);
       }
     });
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+
+    let active = true;
+    const poll = () => {
+      getLiveFeed(session.access_token).then((feed) => {
+        if (active) setLiveFeed(feed);
+      });
+    };
+
+    poll();
+    const timer = setInterval(poll, 15000);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
   }, [session]);
 
   const filteredHotspots = useMemo(() => {
@@ -186,6 +211,14 @@ function App() {
     setSelectedIncident(null);
     setSelectedEvidence(null);
     setEvidenceError("");
+  }
+
+  async function handleSubmitFeedback(payload) {
+    return submitFeedback(session.access_token, {
+      ...payload,
+      report_id: dailyReport?.report_id || "unknown",
+      admin_email: session?.user?.email || null,
+    });
   }
 
   if (supabaseConfigMissing) {
@@ -354,7 +387,11 @@ function App() {
               />
 
               <div className="side-stack">
-                <HotspotDetails hotspot={selectedHotspot} />
+                <LiveFeedPanel liveFeed={liveFeed} />
+                <HotspotDetails
+                  hotspot={selectedHotspot}
+                  onSubmitFeedback={handleSubmitFeedback}
+                />
                 <IncidentFeed
                   incidents={allIncidents}
                   setSelectedSegmentId={setSelectedSegmentId}
@@ -774,7 +811,61 @@ function MapPanel({ hotspots, setSelectedSegmentId, openIncidentEvidence }) {
   );
 }
 
-function HotspotDetails({ hotspot }) {
+function LiveFeedPanel({ liveFeed }) {
+  const isLive = liveFeed && liveFeed.status === "live";
+
+  return (
+    <div className="panel live-panel">
+      <div className="panel-header">
+        <div>
+          <h3>
+            <span className={`live-dot ${isLive ? "on" : ""}`} /> Live CCTV Feed
+          </h3>
+          <p>
+            {isLive
+              ? `Camera ${liveFeed.camera_id || ""} · updated ${formatDateTime(
+                  liveFeed.updated_at
+                )}`
+              : "Waiting for the live stream ingestor..."}
+          </p>
+        </div>
+      </div>
+
+      {isLive ? (
+        <>
+          <div className="live-metrics">
+            <div>
+              <span>Vehicles</span>
+              <strong>{liveFeed.vehicle_count ?? "—"}</strong>
+            </div>
+            <div>
+              <span>Risk</span>
+              <strong>{liveFeed.hotspot?.risk_level || "—"}</strong>
+            </div>
+          </div>
+          <div className="live-events">
+            {(liveFeed.events || []).length === 0 ? (
+              <span className="tag">no events this frame</span>
+            ) : (
+              (liveFeed.events || []).map((event, index) => (
+                <span className="tag" key={index}>
+                  {event.event_type} ({event.severity})
+                </span>
+              ))
+            )}
+          </div>
+        </>
+      ) : (
+        <p className="long-report-text">
+          {liveFeed?.message ||
+            "The live CCTV ingestor analyzes sampled frames in real time. Results appear here once it is running."}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function HotspotDetails({ hotspot, onSubmitFeedback }) {
   return (
     <div className="panel details-panel">
       <div className="panel-header">
@@ -839,6 +930,91 @@ function HotspotDetails({ hotspot }) {
           ))}
         </div>
       </div>
+
+      <FeedbackControls
+        key={hotspot.road_segment_id}
+        hotspot={hotspot}
+        onSubmitFeedback={onSubmitFeedback}
+      />
+    </div>
+  );
+}
+
+function FeedbackControls({ hotspot, onSubmitFeedback }) {
+  const [verdict, setVerdict] = useState(null);
+  const [corrected, setCorrected] = useState("");
+  const [note, setNote] = useState("");
+  const [status, setStatus] = useState("idle");
+
+  async function submit() {
+    if (!verdict || !onSubmitFeedback) return;
+    setStatus("sending");
+    try {
+      await onSubmitFeedback({
+        road_segment_id: hotspot.road_segment_id,
+        verdict,
+        corrected_intervention: corrected.trim() || null,
+        note: note.trim() || null,
+      });
+      setStatus("sent");
+    } catch {
+      setStatus("error");
+    }
+  }
+
+  return (
+    <div className="section feedback-box">
+      <h4>Admin Feedback</h4>
+      <p className="feedback-hint">
+        Was this recommendation correct? Your feedback conditions the next report.
+      </p>
+
+      <div className="feedback-actions">
+        <button
+          type="button"
+          className={`feedback-btn approve ${verdict === "accept" ? "active" : ""}`}
+          onClick={() => setVerdict("accept")}
+        >
+          👍 Accept
+        </button>
+        <button
+          type="button"
+          className={`feedback-btn reject ${verdict === "reject" ? "active" : ""}`}
+          onClick={() => setVerdict("reject")}
+        >
+          👎 Reject
+        </button>
+      </div>
+
+      <input
+        className="feedback-input"
+        placeholder="Corrected intervention (optional)"
+        value={corrected}
+        onChange={(event) => setCorrected(event.target.value)}
+      />
+      <textarea
+        className="feedback-input"
+        placeholder="Note (optional)"
+        rows={2}
+        value={note}
+        onChange={(event) => setNote(event.target.value)}
+      />
+
+      <button
+        type="button"
+        className="feedback-submit"
+        onClick={submit}
+        disabled={!verdict || status === "sending"}
+      >
+        {status === "sending" ? "Submitting..." : "Submit feedback"}
+      </button>
+
+      {status === "sent" && (
+        <p className="feedback-status ok">✓ Feedback recorded — thank you.</p>
+      )}
+      {status === "error" && (
+        <p className="feedback-status err">Could not submit feedback. Try again.</p>
+      )}
     </div>
   );
 }

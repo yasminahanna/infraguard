@@ -55,3 +55,36 @@ export async function getIncidentEvidence(accessToken, incidentId) {
 
   return response.json();
 }
+
+export async function getLiveFeed(accessToken) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/v1/live`, {
+      headers: buildAuthHeaders(accessToken),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch live feed.");
+    }
+
+    return response.json();
+  } catch {
+    return { status: "idle", message: "Live CCTV feed is not available." };
+  }
+}
+
+export async function submitFeedback(accessToken, payload) {
+  const response = await fetch(`${API_BASE_URL}/v1/reports/feedback`, {
+    method: "POST",
+    headers: {
+      ...buildAuthHeaders(accessToken),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to submit feedback.");
+  }
+
+  return response.json();
+}

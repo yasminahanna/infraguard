@@ -316,6 +316,36 @@ async def incident_evidence(
     }
 
 
+@app.get("/v1/live")
+async def live_feed(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict:
+    auth_info = await verify_supabase_admin(authorization)
+
+    live_path = Path("sample_data/live_feed.json")
+
+    if not live_path.exists():
+        return {
+            "status": "idle",
+            "auth": auth_info,
+            "message": (
+                "No live CCTV feed yet. The stream ingestor publishes the latest "
+                "sampled-frame analysis here once it is running."
+            ),
+        }
+
+    try:
+        with live_path.open("r", encoding="utf-8") as file:
+            feed = json.load(file)
+    except (json.JSONDecodeError, OSError):
+        return {"status": "idle", "auth": auth_info, "message": "Live feed not ready."}
+
+    feed["status"] = "live"
+    feed["auth"] = auth_info
+
+    return feed
+
+
 @app.post("/v1/analyze", response_model=AnalyzeResponse)
 async def analyze(
     payload: AnalyzeRequest,

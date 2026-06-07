@@ -948,3 +948,109 @@ select:focus,
     width: 100%;
   }
 }
+
+/* ---- Live CCTV feed panel ---- */
+.live-panel .live-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #9ca3af;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.live-panel .live-dot.on {
+  background: #ef4444;
+  animation: live-pulse 1.6s infinite;
+}
+@keyframes live-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+  70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+.live-metrics {
+  display: flex;
+  gap: 18px;
+  margin: 10px 0;
+}
+.live-metrics span {
+  display: block;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+.live-metrics strong {
+  font-size: 1.25rem;
+}
+.live-events {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ---- Admin feedback controls ---- */
+.feedback-box {
+  border-top: 1px solid #e5e7eb;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+.feedback-hint {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+.feedback-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.feedback-btn {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.feedback-btn.approve.active {
+  background: #dcfce7;
+  border-color: #16a34a;
+}
+.feedback-btn.reject.active {
+  background: #fee2e2;
+  border-color: #dc2626;
+}
+.feedback-input {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  box-sizing: border-box;
+}
+.feedback-submit {
+  width: 100%;
+  padding: 9px;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+.feedback-submit:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+.feedback-status {
+  margin-top: 8px;
+  font-size: 0.85rem;
+}
+.feedback-status.ok {
+  color: #16a34a;
+}
+.feedback-status.err {
+  color: #dc2626;
+}
