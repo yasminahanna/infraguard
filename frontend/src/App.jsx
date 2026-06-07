@@ -7,7 +7,7 @@ import {
   Popup,
   TileLayer,
 } from "react-leaflet";
-import { getLatestReport } from "./api";
+import { getIncidentEvidence, getLatestReport } from "./api";
 import { supabase, supabaseConfigMissing } from "./supabaseClient";
 
 function riskClass(riskLevel) {
@@ -28,15 +28,38 @@ function hotspotColor(riskLevel) {
   return "#22c55e";
 }
 
-function App() {
-  if (supabaseConfigMissing) {
-    return (
-      <div className="loading-screen">
-        Supabase configuration is missing. Check VITE_SUPABASE_URL and
-        VITE_SUPABASE_ANON_KEY.
-      </div>
-    );
+function riskWeight(riskLevel) {
+  if (riskLevel === "high") return 3;
+  if (riskLevel === "medium") return 2;
+  return 1;
+}
+
+function formatDateTime(value) {
+  if (!value) return "Not available";
+
+  try {
+    return new Intl.DateTimeFormat("en", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(value));
+  } catch {
+    return value;
   }
+}
+
+function getAllIncidents(hotspots) {
+  return hotspots.flatMap((hotspot) =>
+    (hotspot.incidents || []).map((incident) => ({
+      ...incident,
+      road_segment_id: hotspot.road_segment_id,
+      camera_id: hotspot.camera_id,
+      location_name: hotspot.location_name,
+      risk_level: hotspot.risk_level,
+    }))
+  );
+}
+
+function App() {
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [dailyReport, setDailyReport] = useState(null);
@@ -44,8 +67,19 @@ function App() {
   const [activePage, setActivePage] = useState("overview");
   const [selectedSegmentId, setSelectedSegmentId] = useState(null);
   const [riskFilter, setRiskFilter] = useState("all");
+  const [searchText, setSearchText] = useState("");
+  const [sortMode, setSortMode] = useState("risk");
+  const [selectedIncident, setSelectedIncident] = useState(null);
+  const [selectedEvidence, setSelectedEvidence] = useState(null);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [evidenceError, setEvidenceError] = useState("");
 
   useEffect(() => {
+    if (supabaseConfigMissing || !supabase) {
+      setAuthLoading(false);
+      return;
+    }
+
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setAuthLoading(false);
@@ -68,23 +102,99 @@ function App() {
     getLatestReport(session.access_token).then(({ report, source }) => {
       setDailyReport(report);
       setReportSource(source);
-      setSelectedSegmentId(report.hotspots[0].road_segment_id);
+
+      if (report.hotspots?.length > 0) {
+        setSelectedSegmentId(report.hotspots[0].road_segment_id);
+      }
     });
   }, [session]);
 
   const filteredHotspots = useMemo(() => {
     if (!dailyReport) return [];
-    if (riskFilter === "all") return dailyReport.hotspots;
 
-    return dailyReport.hotspots.filter(
-      (hotspot) => hotspot.risk_level === riskFilter
+    const query = searchText.trim().toLowerCase();
+
+    const filtered = dailyReport.hotspots.filter((hotspot) => {
+      const riskMatches =
+        riskFilter === "all" || hotspot.risk_level === riskFilter;
+
+      const searchableText = [
+        hotspot.road_segment_id,
+        hotspot.camera_id,
+        hotspot.location_name,
+        hotspot.risk_level,
+        hotspot.trend,
+        hotspot.recommendation?.primary_intervention,
+        ...(hotspot.top_event_types || []),
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      const searchMatches = !query || searchableText.includes(query);
+
+      return riskMatches && searchMatches;
+    });
+
+    return [...filtered].sort((a, b) => {
+      if (sortMode === "score") return b.hotspot_score - a.hotspot_score;
+      if (sortMode === "events") return b.event_count - a.event_count;
+      if (sortMode === "name") {
+        return a.location_name.localeCompare(b.location_name);
+      }
+
+      return riskWeight(b.risk_level) - riskWeight(a.risk_level);
+    });
+  }, [dailyReport, riskFilter, searchText, sortMode]);
+
+  const allIncidents = useMemo(() => {
+    if (!dailyReport) return [];
+
+    return getAllIncidents(filteredHotspots).sort(
+      (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
     );
-  }, [dailyReport, riskFilter]);
+  }, [dailyReport, filteredHotspots]);
 
   async function handleLogout() {
     await supabase.auth.signOut();
     setDailyReport(null);
     setSelectedSegmentId(null);
+  }
+
+  async function openIncidentEvidence(incident) {
+    setSelectedIncident(incident);
+    setSelectedEvidence(null);
+    setEvidenceError("");
+    setEvidenceLoading(true);
+
+    try {
+      const evidence = await getIncidentEvidence(
+        session.access_token,
+        incident.incident_id
+      );
+
+      setSelectedEvidence(evidence);
+    } catch {
+      setEvidenceError(
+        "Could not load CCTV evidence from the backend for this incident."
+      );
+    } finally {
+      setEvidenceLoading(false);
+    }
+  }
+
+  function closeIncidentEvidence() {
+    setSelectedIncident(null);
+    setSelectedEvidence(null);
+    setEvidenceError("");
+  }
+
+  if (supabaseConfigMissing) {
+    return (
+      <div className="loading-screen">
+        Supabase configuration is missing. Check VITE_SUPABASE_URL and
+        VITE_SUPABASE_ANON_KEY.
+      </div>
+    );
   }
 
   if (authLoading) {
@@ -159,16 +269,18 @@ function App() {
       </aside>
 
       <main className="dashboard">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">Daily CCTV Safety Report</p>
-            <h2>
-              {dailyReport.city}, {dailyReport.country}
-            </h2>
-            <p className="muted">Generated at {dailyReport.generated_at}</p>
+        <header className="top-header">
+          <div className="top-header-left">
+            <button className="menu-button">☰</button>
+            <div>
+              <p className="eyebrow">Daily CCTV Safety Report</p>
+              <h2>
+                {dailyReport.city}, {dailyReport.country}
+              </h2>
+            </div>
           </div>
 
-          <div className="topbar-actions">
+          <div className="top-header-actions">
             <span className="live-dot"></span>
             <span>Monitoring active</span>
             <span className="source-pill">
@@ -177,11 +289,39 @@ function App() {
           </div>
         </header>
 
+        <section className="welcome-row">
+          <div>
+            <h3>Hi, Admin</h3>
+            <p>
+              Generated at {formatDateTime(dailyReport.generated_at)} · Review
+              current hotspot risk, incidents, and recommendations.
+            </p>
+          </div>
+          <div className="quick-search">
+            <input
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+              placeholder="Search segment, location, event..."
+            />
+          </div>
+        </section>
+
+        <ReportStatusBar dailyReport={dailyReport} reportSource={reportSource} />
+
         {!dailyReport.recommender_status.using_llm_api && (
           <div className="warning-box top-warning">
             <strong>LLM API not connected</strong>
             <p>{dailyReport.recommender_status.warning}</p>
           </div>
+        )}
+
+        {(activePage === "overview" || activePage === "hotspots") && (
+          <DashboardControls
+            riskFilter={riskFilter}
+            setRiskFilter={setRiskFilter}
+            sortMode={sortMode}
+            setSortMode={setSortMode}
+          />
         )}
 
         {activePage === "overview" && (
@@ -209,24 +349,33 @@ function App() {
             <section className="content-grid">
               <MapPanel
                 hotspots={filteredHotspots}
-                riskFilter={riskFilter}
-                setRiskFilter={setRiskFilter}
                 setSelectedSegmentId={setSelectedSegmentId}
+                openIncidentEvidence={openIncidentEvidence}
               />
 
-              <HotspotDetails hotspot={selectedHotspot} />
+              <div className="side-stack">
+                <HotspotDetails hotspot={selectedHotspot} />
+                <IncidentFeed
+                  incidents={allIncidents}
+                  setSelectedSegmentId={setSelectedSegmentId}
+                  openIncidentEvidence={openIncidentEvidence}
+                />
+              </div>
             </section>
 
             <section className="panel table-panel">
               <div className="panel-header">
                 <div>
                   <h3>Daily Hotspot Ranking</h3>
-                  <p>Click a row to inspect a hotspot on the map.</p>
+                  <p>
+                    Showing {filteredHotspots.length} of{" "}
+                    {dailyReport.hotspots.length} monitored road segments.
+                  </p>
                 </div>
               </div>
 
               <HotspotTable
-                hotspots={dailyReport.hotspots}
+                hotspots={filteredHotspots}
                 setSelectedSegmentId={setSelectedSegmentId}
                 setActivePage={setActivePage}
               />
@@ -239,18 +388,10 @@ function App() {
             <div className="panel-header">
               <div>
                 <h3>Daily Hotspot Ranking</h3>
-                <p>Road segments ranked by risk score.</p>
+                <p>
+                  Search, sort, and inspect monitored road segments by risk.
+                </p>
               </div>
-
-              <select
-                value={riskFilter}
-                onChange={(event) => setRiskFilter(event.target.value)}
-              >
-                <option value="all">All risks</option>
-                <option value="high">High only</option>
-                <option value="medium">Medium only</option>
-                <option value="low">Low only</option>
-              </select>
             </div>
 
             <HotspotTable
@@ -281,10 +422,12 @@ function App() {
               <div className="mini-card">
                 <h4>Report Window</h4>
                 <p>
-                  <strong>Start:</strong> {dailyReport.report_window.start}
+                  <strong>Start:</strong>{" "}
+                  {formatDateTime(dailyReport.report_window.start)}
                 </p>
                 <p>
-                  <strong>End:</strong> {dailyReport.report_window.end}
+                  <strong>End:</strong>{" "}
+                  {formatDateTime(dailyReport.report_window.end)}
                 </p>
               </div>
 
@@ -354,22 +497,92 @@ function App() {
               <HealthCard service="EEP Gateway" status="Online" />
               <HealthCard service="Detection IEP" status="Online" />
               <HealthCard service="Hotspot IEP" status="Online" />
-              <HealthCard service="Recommender IEP" status="Fallback Ready" />
+              <HealthCard service="Recommender IEP" status="Online" />
             </div>
 
             <ReportSection title="Production Readiness">
               <p className="long-report-text">
-                In production, this dashboard will read the latest generated
-                daily report from the backend endpoint instead of static sample
-                data. The intended flow is 24/7 CCTV sampling, detection, event
-                storage, daily hotspot aggregation, LLM/RAG reporting, and
+                In production, this dashboard reads the latest generated daily
+                report from the backend endpoint. The intended flow is 24/7 CCTV
+                sampling, detection, event storage, daily hotspot aggregation,
+                LLM/RAG reporting, feedback-conditioned regeneration, and
                 dashboard display.
               </p>
             </ReportSection>
           </section>
         )}
+
+        <EvidenceReviewPanel
+          incident={selectedIncident}
+          evidence={selectedEvidence}
+          isLoading={evidenceLoading}
+          error={evidenceError}
+          onClose={closeIncidentEvidence}
+        />
       </main>
     </div>
+  );
+}
+
+function ReportStatusBar({ dailyReport, reportSource }) {
+  const usingLlm = dailyReport.recommender_status?.using_llm_api;
+
+  return (
+    <section className="status-strip">
+      <div>
+        <span>Report Source</span>
+        <strong>
+          {reportSource === "backend" ? "Backend generated" : "Sample fallback"}
+        </strong>
+      </div>
+      <div>
+        <span>Recommendation Mode</span>
+        <strong>{usingLlm ? "LLM enabled" : "Fallback mode"}</strong>
+      </div>
+      <div>
+        <span>Generated</span>
+        <strong>{formatDateTime(dailyReport.generated_at)}</strong>
+      </div>
+      <div>
+        <span>Report Window</span>
+        <strong>
+          {formatDateTime(dailyReport.report_window.start)} →{" "}
+          {formatDateTime(dailyReport.report_window.end)}
+        </strong>
+      </div>
+    </section>
+  );
+}
+
+function DashboardControls({ riskFilter, setRiskFilter, sortMode, setSortMode }) {
+  return (
+    <section className="dashboard-controls">
+      <label>
+        Risk
+        <select
+          value={riskFilter}
+          onChange={(event) => setRiskFilter(event.target.value)}
+        >
+          <option value="all">All risks</option>
+          <option value="high">High only</option>
+          <option value="medium">Medium only</option>
+          <option value="low">Low only</option>
+        </select>
+      </label>
+
+      <label>
+        Sort
+        <select
+          value={sortMode}
+          onChange={(event) => setSortMode(event.target.value)}
+        >
+          <option value="risk">Risk level</option>
+          <option value="score">Hotspot score</option>
+          <option value="events">Event count</option>
+          <option value="name">Location name</option>
+        </select>
+      </label>
+    </section>
   );
 }
 
@@ -464,24 +677,14 @@ function ReportSection({ title, children }) {
   );
 }
 
-function MapPanel({ hotspots, riskFilter, setRiskFilter, setSelectedSegmentId }) {
+function MapPanel({ hotspots, setSelectedSegmentId, openIncidentEvidence }) {
   return (
     <div className="map-panel panel">
       <div className="panel-header">
         <div>
           <h3>City Hotspot Map</h3>
-          <p>Red dots are incidents. Circles show hotspot areas.</p>
+          <p>Click red incident dots to review CCTV evidence metadata.</p>
         </div>
-
-        <select
-          value={riskFilter}
-          onChange={(event) => setRiskFilter(event.target.value)}
-        >
-          <option value="all">All risks</option>
-          <option value="high">High only</option>
-          <option value="medium">Medium only</option>
-          <option value="low">Low only</option>
-        </select>
       </div>
 
       <MapContainer center={[33.8955, 35.486]} zoom={14} className="map">
@@ -530,15 +733,24 @@ function MapPanel({ hotspots, riskFilter, setRiskFilter, setSelectedSegmentId })
                 <CircleMarker
                   key={incident.incident_id}
                   center={[incident.lat, incident.lon]}
-                  radius={7}
+                  radius={8}
                   pathOptions={{
                     color: "#991b1b",
                     fillColor: "#ef4444",
-                    fillOpacity: 0.9,
+                    fillOpacity: 0.95,
                     weight: 2,
                   }}
                   eventHandlers={{
-                    click: () => setSelectedSegmentId(hotspot.road_segment_id),
+                    click: () => {
+                      setSelectedSegmentId(hotspot.road_segment_id);
+                      openIncidentEvidence({
+                        ...incident,
+                        road_segment_id: hotspot.road_segment_id,
+                        camera_id: hotspot.camera_id,
+                        location_name: hotspot.location_name,
+                        risk_level: hotspot.risk_level,
+                      });
+                    },
                   }}
                 >
                   <Popup>
@@ -548,7 +760,9 @@ function MapPanel({ hotspots, riskFilter, setRiskFilter, setSelectedSegmentId })
                     <br />
                     Confidence: {incident.confidence}
                     <br />
-                    Time: {incident.timestamp}
+                    Time: {formatDateTime(incident.timestamp)}
+                    <br />
+                    Click dot to review CCTV evidence.
                   </Popup>
                 </CircleMarker>
               ))}
@@ -609,7 +823,9 @@ function HotspotDetails({ hotspot }) {
       <div className="section recommendation-box">
         <div className="recommendation-header">
           <h4>Recommended Action</h4>
-          <span className="provider-pill">{hotspot.recommendation.provider}</span>
+          <span className="provider-pill">
+            {hotspot.recommendation.provider}
+          </span>
         </div>
 
         <p className="intervention">
@@ -622,6 +838,44 @@ function HotspotDetails({ hotspot }) {
             <span key={action}>{action}</span>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function IncidentFeed({ incidents, setSelectedSegmentId, openIncidentEvidence }) {
+  return (
+    <div className="panel incident-feed">
+      <div className="panel-header">
+        <div>
+          <h3>Active Incidents</h3>
+          <p>Most recent incidents from the filtered hotspot set.</p>
+        </div>
+      </div>
+
+      <div className="incident-list">
+        {incidents.slice(0, 8).map((incident) => (
+          <button
+            className="incident-item"
+            key={incident.incident_id}
+            onClick={() => {
+              setSelectedSegmentId(incident.road_segment_id);
+              openIncidentEvidence(incident);
+            }}
+          >
+            <span className={`incident-dot ${riskClass(incident.risk_level)}`}></span>
+            <div>
+              <strong>{incident.event_type}</strong>
+              <p>
+                {incident.location_name} · {formatDateTime(incident.timestamp)}
+              </p>
+            </div>
+          </button>
+        ))}
+
+        {incidents.length === 0 && (
+          <p className="long-report-text">No incidents match the current filters.</p>
+        )}
       </div>
     </div>
   );
@@ -658,6 +912,10 @@ function HotspotTable({ hotspots, setSelectedSegmentId, setActivePage }) {
           <span>{hotspot.recommendation.primary_intervention}</span>
         </button>
       ))}
+
+      {hotspots.length === 0 && (
+        <div className="empty-state">No hotspots match the current filters.</div>
+      )}
     </div>
   );
 }
@@ -667,6 +925,108 @@ function HealthCard({ service, status }) {
     <div className="mini-card">
       <strong>{service}</strong>
       <span className="health-status">{status}</span>
+    </div>
+  );
+}
+
+function EvidenceReviewPanel({ incident, evidence, isLoading, error, onClose }) {
+  if (!incident) return null;
+
+  const evidenceInfo = evidence?.evidence;
+  const decisionContext = evidence?.decision_context;
+
+  return (
+    <div className="evidence-overlay">
+      <aside className="evidence-panel">
+        <div className="evidence-header">
+          <div>
+            <span>CCTV Evidence Review</span>
+            <h3>{incident.event_type}</h3>
+          </div>
+
+          <button onClick={onClose}>Close</button>
+        </div>
+
+        {isLoading && (
+          <div className="evidence-loading">
+            Loading incident evidence from backend...
+          </div>
+        )}
+
+        {error && <div className="evidence-error">{error}</div>}
+
+        {!isLoading && !error && (
+          <>
+            <div className="evidence-video-box">
+              {evidenceInfo?.clip_url ? (
+                <video controls src={evidenceInfo.clip_url}>
+                  Your browser does not support video playback.
+                </video>
+              ) : (
+                <div className="evidence-placeholder">
+                  <strong>No CCTV clip attached yet</strong>
+                  <p>
+                    The backend evidence endpoint is working, but this incident
+                    does not yet have a real video clip URL. When live CCTV
+                    storage is connected, the clip will appear here.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="evidence-grid">
+              <div>
+                <span>Incident ID</span>
+                <strong>{incident.incident_id}</strong>
+              </div>
+
+              <div>
+                <span>Severity</span>
+                <strong>{incident.severity}</strong>
+              </div>
+
+              <div>
+                <span>Confidence</span>
+                <strong>{incident.confidence}</strong>
+              </div>
+
+              <div>
+                <span>Timestamp</span>
+                <strong>{formatDateTime(incident.timestamp)}</strong>
+              </div>
+
+              <div>
+                <span>Camera</span>
+                <strong>{decisionContext?.camera_id || incident.camera_id}</strong>
+              </div>
+
+              <div>
+                <span>Road Segment</span>
+                <strong>
+                  {decisionContext?.road_segment_id || incident.road_segment_id}
+                </strong>
+              </div>
+            </div>
+
+            <div className="evidence-section">
+              <h4>Why this incident was flagged</h4>
+              <p>
+                {decisionContext?.explanation ||
+                  "This incident was included because it matched a detected traffic-risk event in the latest report."}
+              </p>
+            </div>
+
+            <div className="evidence-section">
+              <h4>Evidence status</h4>
+              <p>
+                {evidenceInfo?.clip_available
+                  ? "A CCTV evidence clip is available for review."
+                  : "Only event metadata is currently available. CCTV clip storage is ready to be connected."}
+              </p>
+            </div>
+          </>
+        )}
+      </aside>
     </div>
   );
 }
