@@ -22,18 +22,30 @@ services:
       - detection-iep
       - hotspot-iep
       - recommender-iep
+    networks:
+      infraguard-net:
+        aliases:
+          - eep-gateway
 
   detection-iep:
     build: ./services/detection_iep
     container_name: infraguard-detection-iep
     ports:
       - "8001:8001"
+    networks:
+      infraguard-net:
+        aliases:
+          - detection-iep
 
   hotspot-iep:
     build: ./services/hotspot_iep
     container_name: infraguard-hotspot-iep
     ports:
       - "8002:8002"
+    networks:
+      infraguard-net:
+        aliases:
+          - hotspot-iep
 
   recommender-iep:
     build: ./services/recommender_iep
@@ -54,6 +66,12 @@ services:
     volumes:
       - report_store:/app/sample_data
       - ./samples:/app/samples:ro
+    depends_on:
+      - hotspot-iep
+    networks:
+      infraguard-net:
+        aliases:
+          - recommender-iep
 
   frontend:
     build:
@@ -67,6 +85,10 @@ services:
       - "5173:80"
     depends_on:
       - eep-gateway
+    networks:
+      infraguard-net:
+        aliases:
+          - frontend
 
   prometheus:
     image: prom/prometheus:v2.54.1
@@ -80,6 +102,10 @@ services:
       - detection-iep
       - hotspot-iep
       - recommender-iep
+    networks:
+      infraguard-net:
+        aliases:
+          - prometheus
 
   grafana:
     image: grafana/grafana:11.2.0
@@ -91,6 +117,14 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: admin
     depends_on:
       - prometheus
+    networks:
+      infraguard-net:
+        aliases:
+          - grafana
 
 volumes:
   report_store:
+
+networks:
+  infraguard-net:
+    name: infraguard-net
