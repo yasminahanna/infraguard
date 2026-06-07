@@ -1,0 +1,89 @@
+{
+  "city": "Beirut",
+  "country": "Lebanon",
+  "total_cameras": 4,
+  "report_window": { "start": "2026-06-04T00:00:00Z", "end": "2026-06-04T23:59:59Z" },
+  "segments": {
+    "segment_12": {
+      "camera_id": "aub_gate_01",
+      "location_name": "AUB Gate area",
+      "location": { "lat": 33.9001, "lon": 35.4832 },
+      "radius_meters": 180,
+      "metadata": {
+        "historical_avg_events": 3,
+        "time_of_day": "peak",
+        "weather": "clear",
+        "city": "Beirut",
+        "country": "Lebanon",
+        "location_name": "AUB Gate area"
+      }
+    },
+    "segment_07": {
+      "camera_id": "hamra_02",
+      "location_name": "Hamra main street",
+      "location": { "lat": 33.8955, "lon": 35.4827 },
+      "radius_meters": 140,
+      "metadata": {
+        "historical_avg_events": 6,
+        "time_of_day": "day",
+        "weather": "clear",
+        "city": "Beirut",
+        "country": "Lebanon",
+        "location_name": "Hamra main street"
+      }
+    },
+    "segment_03": {
+      "camera_id": "corniche_01",
+      "location_name": "Corniche road",
+      "location": { "lat": 33.9018, "lon": 35.4742 },
+      "radius_meters": 150,
+      "metadata": {
+        "historical_avg_events": 9,
+        "time_of_day": "night",
+        "weather": "clear",
+        "city": "Beirut",
+        "country": "Lebanon",
+        "location_name": "Corniche road"
+      }
+    },
+    "segment_01": {
+      "camera_id": "downtown_01",
+      "location_name": "Downtown intersection",
+      "location": { "lat": 33.8938, "lon": 35.5018 },
+      "radius_meters": 100,
+      "metadata": {
+        "historical_avg_events": 4,
+        "time_of_day": "day",
+        "weather": "clear",
+        "city": "Beirut",
+        "country": "Lebanon",
+        "location_name": "Downtown intersection"
+      }
+    }
+  },
+  "events": [
+    { "incident_id": "inc_001", "road_segment_id": "segment_12", "event_type": "unsafe_proximity", "severity": "high", "confidence": 0.84, "timestamp": "2026-06-04T08:15:00Z", "lat": 33.9002, "lon": 35.4831, "vehicle_count": 8 },
+    { "incident_id": "inc_002", "road_segment_id": "segment_12", "event_type": "high_density", "severity": "high", "confidence": 0.78, "timestamp": "2026-06-04T09:40:00Z", "lat": 33.9004, "lon": 35.4834, "vehicle_count": 9 },
+    { "incident_id": "inc_003", "road_segment_id": "segment_12", "event_type": "reckless_driving", "severity": "medium", "confidence": 0.70, "timestamp": "2026-06-04T17:20:00Z", "lat": 33.8999, "lon": 35.4830, "vehicle_count": 7 },
+    { "incident_id": "inc_004", "road_segment_id": "segment_12", "event_type": "unsafe_proximity", "severity": "medium", "confidence": 0.66, "timestamp": "2026-06-04T18:05:00Z", "lat": 33.9003, "lon": 35.4833, "vehicle_count": 6 },
+    { "incident_id": "inc_005", "road_segment_id": "segment_12", "event_type": "high_density", "severity": "medium", "confidence": 0.62, "timestamp": "2026-06-04T19:30:00Z", "lat": 33.9000, "lon": 35.4835, "vehicle_count": 7 },
+
+    { "incident_id": "inc_006", "road_segment_id": "segment_07", "event_type": "high_density", "severity": "medium", "confidence": 0.66, "timestamp": "2026-06-04T12:25:00Z", "lat": 33.8956, "lon": 35.4826, "vehicle_count": 6 },
+    { "incident_id": "inc_007", "road_segment_id": "segment_07", "event_type": "lane_violation", "severity": "medium", "confidence": 0.60, "timestamp": "2026-06-04T16:10:00Z", "lat": 33.8953, "lon": 35.4829, "vehicle_count": 5 },
+    { "incident_id": "inc_008", "road_segment_id": "segment_07", "event_type": "high_density", "severity": "medium", "confidence": 0.64, "timestamp": "2026-06-04T13:45:00Z", "lat": 33.8957, "lon": 35.4828, "vehicle_count": 6 },
+    { "incident_id": "inc_009", "road_segment_id": "segment_07", "event_type": "lane_violation", "severity": "low", "confidence": 0.55, "timestamp": "2026-06-04T14:50:00Z", "lat": 33.8954, "lon": 35.4825, "vehicle_count": 4 },
+    { "incident_id": "inc_010", "road_segment_id": "segment_07", "event_type": "high_density", "severity": "medium", "confidence": 0.62, "timestamp": "2026-06-04T15:20:00Z", "lat": 33.8955, "lon": 35.4827, "vehicle_count": 5 },
+    { "incident_id": "inc_011", "road_segment_id": "segment_07", "event_type": "unsafe_proximity", "severity": "medium", "confidence": 0.58, "timestamp": "2026-06-04T18:40:00Z", "lat": 33.8952, "lon": 35.4830, "vehicle_count": 5 },
+
+    { "incident_id": "inc_012", "road_segment_id": "segment_03", "event_type": "possible_speeding", "severity": "medium", "confidence": 0.64, "timestamp": "2026-06-04T21:45:00Z", "lat": 33.9019, "lon": 35.4740, "vehicle_count": 5 },
+    { "incident_id": "inc_013", "road_segment_id": "segment_03", "event_type": "possible_speeding", "severity": "medium", "confidence": 0.60, "timestamp": "2026-06-04T22:30:00Z", "lat": 33.9017, "lon": 35.4743, "vehicle_count": 4 },
+    { "incident_id": "inc_014", "road_segment_id": "segment_03", "event_type": "lane_violation", "severity": "low", "confidence": 0.55, "timestamp": "2026-06-04T23:10:00Z", "lat": 33.9020, "lon": 35.4741, "vehicle_count": 3 },
+    { "incident_id": "inc_015", "road_segment_id": "segment_03", "event_type": "possible_speeding", "severity": "medium", "confidence": 0.58, "timestamp": "2026-06-04T20:55:00Z", "lat": 33.9016, "lon": 35.4744, "vehicle_count": 4 },
+    { "incident_id": "inc_016", "road_segment_id": "segment_03", "event_type": "high_density", "severity": "low", "confidence": 0.50, "timestamp": "2026-06-04T19:05:00Z", "lat": 33.9018, "lon": 35.4742, "vehicle_count": 4 },
+
+    { "incident_id": "inc_017", "road_segment_id": "segment_01", "event_type": "normal_traffic", "severity": "low", "confidence": 0.52, "timestamp": "2026-06-04T10:15:00Z", "lat": 33.8939, "lon": 35.5017, "vehicle_count": 3 },
+    { "incident_id": "inc_018", "road_segment_id": "segment_01", "event_type": "high_density", "severity": "low", "confidence": 0.48, "timestamp": "2026-06-04T11:35:00Z", "lat": 33.8937, "lon": 35.5019, "vehicle_count": 4 },
+    { "incident_id": "inc_019", "road_segment_id": "segment_01", "event_type": "normal_traffic", "severity": "low", "confidence": 0.50, "timestamp": "2026-06-04T13:00:00Z", "lat": 33.8938, "lon": 35.5018, "vehicle_count": 3 },
+    { "incident_id": "inc_020", "road_segment_id": "segment_01", "event_type": "possible_speeding", "severity": "low", "confidence": 0.45, "timestamp": "2026-06-04T16:25:00Z", "lat": 33.8940, "lon": 35.5016, "vehicle_count": 3 }
+  ]
+}

@@ -351,3 +351,43 @@ async def analyze(
         fallbacks_used=fallbacks_used,
         latency_ms=latency_ms,
     )
+
+
+class ReportFeedbackRequest(BaseModel):
+    report_id: str = Field(..., min_length=1, max_length=200)
+    road_segment_id: str = Field(..., min_length=1, max_length=100)
+    verdict: Literal["accept", "reject"]
+    corrected_intervention: str | None = None
+    note: str | None = Field(default=None, max_length=1000)
+    admin_email: str | None = None
+
+
+@app.post("/v1/reports/feedback")
+async def submit_report_feedback(
+    payload: ReportFeedbackRequest,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict:
+    await verify_supabase_admin(authorization)
+    recommender_url = os.getenv("RECOMMENDER_IEP_URL", "http://recommender-iep:8003")
+    async with httpx.AsyncClient(timeout=15) as client:
+        return await post_json(
+            client=client,
+            url=f"{recommender_url}/v1/reports/feedback",
+            payload=payload.model_dump(),
+            service_name="recommender_iep",
+        )
+
+
+@app.get("/v1/reports/feedback")
+async def list_report_feedback(
+    limit: int = 50,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict:
+    await verify_supabase_admin(authorization)
+    recommender_url = os.getenv("RECOMMENDER_IEP_URL", "http://recommender-iep:8003")
+    async with httpx.AsyncClient(timeout=15) as client:
+        response = await client.get(
+            f"{recommender_url}/v1/reports/feedback", params={"limit": limit}
+        )
+        response.raise_for_status()
+        return response.json()

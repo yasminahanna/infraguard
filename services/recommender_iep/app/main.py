@@ -10,6 +10,10 @@ from pydantic import BaseModel, Field, ValidationError
 from starlette.responses import Response
 from app.web_search import retrieve_web_context
 
+from pathlib import Path
+from app.reporter.report_builder import generate_daily_report
+from app.reporter.feedback_store import append_feedback, load_recent_feedback
+
 
 app = FastAPI(
     title="InfraGuard LLM Recommender IEP",
@@ -276,3 +280,45 @@ def recommend(payload: RecommendationRequest) -> RecommendationResponse:
         latency_ms=latency_ms,
         retrieved_context=retrieved_context,
     )
+
+
+@app.post("/v1/reports/generate")
+def generate_report() -> dict:
+    report = generate_daily_report()
+    return {
+        "status": "generated",
+        "report_id": report["report_id"],
+        "using_llm_api": report["recommender_status"]["using_llm_api"],
+        "segments": len(report["hotspots"]),
+        "store_path": os.getenv("REPORT_STORE_PATH", "/app/sample_data/daily_report_sample.json"),
+    }
+
+
+@app.get("/v1/reports/latest")
+def latest_report() -> dict:
+    store_path = os.getenv("REPORT_STORE_PATH", "/app/sample_data/daily_report_sample.json")
+    path = Path(store_path)
+    if not path.exists():
+        return {"status": "placeholder", "message": "No daily report generated yet."}
+    with path.open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+class FeedbackRequest(BaseModel):
+    report_id: str = Field(..., min_length=1, max_length=200)
+    road_segment_id: str = Field(..., min_length=1, max_length=100)
+    verdict: Literal["accept", "reject"]
+    corrected_intervention: str | None = None
+    note: str | None = Field(default=None, max_length=1000)
+    admin_email: str | None = None
+
+
+@app.post("/v1/reports/feedback")
+def submit_feedback(payload: FeedbackRequest) -> dict:
+    record = append_feedback(payload.model_dump())
+    return {"status": "recorded", "feedback": record}
+
+
+@app.get("/v1/reports/feedback")
+def list_feedback(limit: int = 50) -> dict:
+    return {"feedback": load_recent_feedback(limit)}

@@ -16,6 +16,8 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       SUPABASE_ADMIN_EMAILS: ${SUPABASE_ADMIN_EMAILS}
+    volumes:
+      - report_store:/app/sample_data
     depends_on:
       - detection-iep
       - hotspot-iep
@@ -46,6 +48,12 @@ services:
       WEB_SEARCH_ENABLED: ${WEB_SEARCH_ENABLED}
       TAVILY_API_KEY: ${TAVILY_API_KEY}
       WEB_SEARCH_MAX_RESULTS: ${WEB_SEARCH_MAX_RESULTS}
+      HOTSPOT_IEP_URL: http://hotspot-iep:8002
+      EVENTS_PATH: /app/samples/events_sample.json
+      REPORT_STORE_PATH: /app/sample_data/daily_report_sample.json
+    volumes:
+      - report_store:/app/sample_data
+      - ./samples:/app/samples:ro
 
   frontend:
     build:
@@ -83,3 +91,6 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: admin
     depends_on:
       - prometheus
+
+volumes:
+  report_store:
