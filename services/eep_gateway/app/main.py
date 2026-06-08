@@ -245,6 +245,26 @@ def get_cctv_clip_urls() -> list[str]:
     return [url.strip() for url in urls_text.split(",") if url.strip()]
 
 
+def load_camera_registry() -> dict:
+    """Load the CCTV device registry (camera_id -> metadata: IP, model, status...).
+
+    This is the camera-management 'database' for the demo. It is baked into the image
+    (not on the shared report volume), so it is always available. Returns {} if missing.
+    """
+    registry_path = Path(
+        os.getenv("CAMERA_REGISTRY_PATH", str(Path(__file__).parent / "camera_registry.json"))
+    )
+
+    if not registry_path.exists():
+        return {}
+
+    try:
+        with registry_path.open("r", encoding="utf-8") as file:
+            return json.load(file).get("cameras", {})
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
 def find_incident_in_latest_report(incident_id: str) -> tuple[dict | None, dict | None]:
     """Locate (incident, parent_hotspot) in the stored daily report, else (None, None)."""
     report_path = Path("sample_data/daily_report_sample.json")
@@ -314,6 +334,72 @@ async def incident_evidence(
             "explanation": explanation,
         },
     }
+
+
+@app.get("/v1/cameras")
+async def list_cameras(
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict:
+    """List monitored CCTV cameras for the map.
+
+    Each camera is a real monitoring source (distinct from the red incident dots):
+    it carries device metadata from the camera registry (IP address, model, status)
+    and its public Azure Blob footage URL. Powers the camera markers on the dashboard.
+    """
+    auth_info = await verify_supabase_admin(authorization)
+
+    clips = get_cctv_clip_urls()
+    registry = load_camera_registry()
+    report_path = Path("sample_data/daily_report_sample.json")
+
+    report = {}
+    if report_path.exists():
+        try:
+            with report_path.open("r", encoding="utf-8") as file:
+                report = json.load(file)
+        except (json.JSONDecodeError, OSError):
+            report = {}
+
+    cameras = []
+    seen: set[str] = set()
+
+    for hotspot in report.get("hotspots", []):
+        camera_id = hotspot.get("camera_id")
+        location = hotspot.get("location") or {}
+
+        if not camera_id or camera_id in seen:
+            continue
+        if "lat" not in location or "lon" not in location:
+            continue
+
+        seen.add(camera_id)
+        device = registry.get(camera_id, {})
+        ip_address = device.get("ip_address")
+        clip_url = clips[sum(ord(c) for c in camera_id) % len(clips)] if clips else None
+
+        cameras.append(
+            {
+                "camera_id": camera_id,
+                "road_segment_id": hotspot.get("road_segment_id"),
+                "location_name": device.get("display_name")
+                or hotspot.get("location_name", camera_id),
+                "location": {"lat": location["lat"], "lon": location["lon"]},
+                "risk_level": hotspot.get("risk_level", "unknown"),
+                "clip_url": clip_url,
+                "clip_available": clip_url is not None,
+                "ip_address": ip_address,
+                "rtsp_url": f"rtsp://{ip_address}:554/Streaming/Channels/101"
+                if ip_address
+                else None,
+                "model": device.get("model"),
+                "resolution": device.get("resolution"),
+                "fps": device.get("fps"),
+                "status": device.get("status", "unknown"),
+                "installed_on": device.get("installed_on"),
+            }
+        )
+
+    return {"auth": auth_info, "camera_count": len(cameras), "cameras": cameras}
 
 
 @app.get("/v1/live")

@@ -7,7 +7,9 @@ import {
   Popup,
   TileLayer,
 } from "react-leaflet";
+import L from "leaflet";
 import {
+  getCameras,
   getIncidentEvidence,
   getLatestReport,
   getLiveFeed,
@@ -37,6 +39,19 @@ function riskWeight(riskLevel) {
   if (riskLevel === "high") return 3;
   if (riskLevel === "medium") return 2;
   return 1;
+}
+
+function cameraIcon(riskLevel, status) {
+  const color = hotspotColor(riskLevel);
+  const offline = status && status !== "online";
+
+  return L.divIcon({
+    className: "camera-marker",
+    html: `<div class="camera-pin ${offline ? "offline" : ""}" style="border-color:${color}">📷</div>`,
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
+    popupAnchor: [0, -16],
+  });
 }
 
 function formatDateTime(value) {
@@ -79,6 +94,8 @@ function App() {
   const [evidenceLoading, setEvidenceLoading] = useState(false);
   const [evidenceError, setEvidenceError] = useState("");
   const [liveFeed, setLiveFeed] = useState(null);
+  const [cameras, setCameras] = useState([]);
+  const [selectedCamera, setSelectedCamera] = useState(null);
 
   useEffect(() => {
     if (supabaseConfigMissing || !supabase) {
@@ -113,6 +130,12 @@ function App() {
         setSelectedSegmentId(report.hotspots[0].road_segment_id);
       }
     });
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+
+    getCameras(session.access_token).then(setCameras);
   }, [session]);
 
   useEffect(() => {
@@ -178,6 +201,23 @@ function App() {
       (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
     );
   }, [dailyReport, filteredHotspots]);
+
+  const cameraById = useMemo(() => {
+    const lookup = {};
+    for (const camera of cameras) {
+      lookup[camera.camera_id] = camera;
+    }
+    return lookup;
+  }, [cameras]);
+
+  function openCameraFootage(cameraInfo) {
+    const enriched = cameraById[cameraInfo.camera_id] || {};
+    setSelectedCamera({ ...cameraInfo, ...enriched });
+  }
+
+  function closeCameraFootage() {
+    setSelectedCamera(null);
+  }
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -384,6 +424,8 @@ function App() {
                 hotspots={filteredHotspots}
                 setSelectedSegmentId={setSelectedSegmentId}
                 openIncidentEvidence={openIncidentEvidence}
+                openCameraFootage={openCameraFootage}
+                cameraById={cameraById}
               />
 
               <div className="side-stack">
@@ -556,6 +598,11 @@ function App() {
           error={evidenceError}
           onClose={closeIncidentEvidence}
         />
+
+        <CameraFootagePanel
+          camera={selectedCamera}
+          onClose={closeCameraFootage}
+        />
       </main>
     </div>
   );
@@ -714,13 +761,22 @@ function ReportSection({ title, children }) {
   );
 }
 
-function MapPanel({ hotspots, setSelectedSegmentId, openIncidentEvidence }) {
+function MapPanel({
+  hotspots,
+  setSelectedSegmentId,
+  openIncidentEvidence,
+  openCameraFootage,
+  cameraById,
+}) {
   return (
     <div className="map-panel panel">
       <div className="panel-header">
         <div>
-          <h3>City Hotspot Map</h3>
-          <p>Click red incident dots to review CCTV evidence metadata.</p>
+          <h3>City CCTV &amp; Hotspot Map</h3>
+          <p>
+            📷 Camera markers are live CCTV sources — click one for its footage and
+            device info. Red dots are detected incidents.
+          </p>
         </div>
       </div>
 
@@ -749,22 +805,43 @@ function MapPanel({ hotspots, setSelectedSegmentId, openIncidentEvidence }) {
                 }}
               />
 
-              <Marker
-                position={[hotspot.location.lat, hotspot.location.lon]}
-                eventHandlers={{
-                  click: () => setSelectedSegmentId(hotspot.road_segment_id),
-                }}
-              >
-                <Popup>
-                  <strong>{hotspot.location_name}</strong>
-                  <br />
-                  Hotspot area
-                  <br />
-                  Risk: {hotspot.risk_level}
-                  <br />
-                  Score: {hotspot.hotspot_score}
-                </Popup>
-              </Marker>
+              {(() => {
+                const camera = cameraById[hotspot.camera_id] || {};
+                const cameraInfo = {
+                  camera_id: hotspot.camera_id,
+                  road_segment_id: hotspot.road_segment_id,
+                  location_name: camera.location_name || hotspot.location_name,
+                  risk_level: hotspot.risk_level,
+                };
+
+                return (
+                  <Marker
+                    position={[hotspot.location.lat, hotspot.location.lon]}
+                    icon={cameraIcon(hotspot.risk_level, camera.status)}
+                    eventHandlers={{
+                      click: () => setSelectedSegmentId(hotspot.road_segment_id),
+                    }}
+                  >
+                    <Popup>
+                      <strong>📷 {hotspot.camera_id}</strong>
+                      <br />
+                      {camera.location_name || hotspot.location_name}
+                      <br />
+                      IP: {camera.ip_address || "n/a"}
+                      <br />
+                      Status: {camera.status || "unknown"} · Risk: {hotspot.risk_level}
+                      <br />
+                      <button
+                        type="button"
+                        className="popup-cam-btn"
+                        onClick={() => openCameraFootage(cameraInfo)}
+                      >
+                        ▶ Watch camera footage
+                      </button>
+                    </Popup>
+                  </Marker>
+                );
+              })()}
 
               {(hotspot.incidents || []).map((incident) => (
                 <CircleMarker
@@ -1202,6 +1279,103 @@ function EvidenceReviewPanel({ incident, evidence, isLoading, error, onClose }) 
             </div>
           </>
         )}
+      </aside>
+    </div>
+  );
+}
+
+function CameraFootagePanel({ camera, onClose }) {
+  if (!camera) return null;
+
+  return (
+    <div className="evidence-overlay">
+      <aside className="evidence-panel">
+        <div className="evidence-header">
+          <div>
+            <span>CCTV Camera Feed</span>
+            <h3>📷 {camera.camera_id}</h3>
+          </div>
+
+          <button onClick={onClose}>Close</button>
+        </div>
+
+        <div className="evidence-video-box">
+          {camera.clip_url ? (
+            <video controls autoPlay muted src={camera.clip_url}>
+              Your browser does not support video playback.
+            </video>
+          ) : (
+            <div className="evidence-placeholder">
+              <strong>No footage connected for this camera</strong>
+              <p>
+                This camera is registered and mapped, but its Azure Blob clip URL is
+                not configured yet. Set <code>CCTV_CLIP_URLS</code> on the EEP to attach
+                footage.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="evidence-grid">
+          <div>
+            <span>Camera ID</span>
+            <strong>{camera.camera_id}</strong>
+          </div>
+
+          <div>
+            <span>IP Address</span>
+            <strong>{camera.ip_address || "n/a"}</strong>
+          </div>
+
+          <div>
+            <span>Status</span>
+            <strong>{camera.status || "unknown"}</strong>
+          </div>
+
+          <div>
+            <span>Model</span>
+            <strong>{camera.model || "n/a"}</strong>
+          </div>
+
+          <div>
+            <span>Resolution</span>
+            <strong>
+              {camera.resolution || "n/a"}
+              {camera.fps ? ` · ${camera.fps}fps` : ""}
+            </strong>
+          </div>
+
+          <div>
+            <span>Road Segment</span>
+            <strong>{camera.road_segment_id || "n/a"}</strong>
+          </div>
+
+          <div>
+            <span>Location</span>
+            <strong>{camera.location_name || "n/a"}</strong>
+          </div>
+
+          <div>
+            <span>Installed</span>
+            <strong>{camera.installed_on || "n/a"}</strong>
+          </div>
+        </div>
+
+        {camera.rtsp_url && (
+          <div className="evidence-section">
+            <h4>Stream endpoint</h4>
+            <p className="camera-rtsp">{camera.rtsp_url}</p>
+          </div>
+        )}
+
+        <div className="evidence-section">
+          <h4>About this feed</h4>
+          <p>
+            Recorded CCTV footage sampled by the detection pipeline for this monitoring
+            location. The red dots on the map are individual incidents this camera
+            detected.
+          </p>
+        </div>
       </aside>
     </div>
   );

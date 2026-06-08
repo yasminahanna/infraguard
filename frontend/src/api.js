@@ -56,6 +56,23 @@ export async function getIncidentEvidence(accessToken, incidentId) {
   return response.json();
 }
 
+export async function getCameras(accessToken) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/v1/cameras`, {
+      headers: buildAuthHeaders(accessToken),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch cameras.");
+    }
+
+    const data = await response.json();
+    return data.cameras || [];
+  } catch {
+    return [];
+  }
+}
+
 export async function getLiveFeed(accessToken) {
   try {
     const response = await fetch(`${API_BASE_URL}/v1/live`, {

@@ -1,0 +1,41 @@
+{
+  "_comment": "Demo CCTV camera registry (device inventory). IP addresses are fake/private (CCTV VLAN style) for the demo; in production this is the camera-management database. Keyed by camera_id used across the detection/hotspot/report pipeline.",
+  "cameras": {
+    "aub_gate_01": {
+      "ip_address": "10.20.14.11",
+      "model": "Hikvision DS-2CD2T47G2",
+      "resolution": "1920x1080",
+      "fps": 25,
+      "status": "online",
+      "installed_on": "2024-03-12",
+      "display_name": "AUB Main Gate"
+    },
+    "hamra_02": {
+      "ip_address": "10.20.14.27",
+      "model": "Dahua IPC-HFW5442E",
+      "resolution": "2688x1520",
+      "fps": 30,
+      "status": "online",
+      "installed_on": "2024-05-08",
+      "display_name": "Hamra Street"
+    },
+    "corniche_01": {
+      "ip_address": "10.20.15.04",
+      "model": "Axis P1448-LE",
+      "resolution": "3840x2160",
+      "fps": 20,
+      "status": "online",
+      "installed_on": "2023-11-21",
+      "display_name": "Corniche Promenade"
+    },
+    "downtown_01": {
+      "ip_address": "10.20.15.32",
+      "model": "Hikvision DS-2CD2386G2",
+      "resolution": "3840x2160",
+      "fps": 25,
+      "status": "degraded",
+      "installed_on": "2024-01-17",
+      "display_name": "Downtown Beirut"
+    }
+  }
+}
