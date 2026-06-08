@@ -8,7 +8,8 @@
       "fps": 25,
       "status": "online",
       "installed_on": "2024-03-12",
-      "display_name": "AUB Main Gate"
+      "display_name": "AUB Main Gate",
+      "clip": "cam_monitoring.mp4"
     },
     "hamra_02": {
       "ip_address": "10.20.14.27",
@@ -17,7 +18,8 @@
       "fps": 30,
       "status": "online",
       "installed_on": "2024-05-08",
-      "display_name": "Hamra Street"
+      "display_name": "Hamra Street",
+      "clip": "cam_hamra.mp4"
     },
     "corniche_01": {
       "ip_address": "10.20.15.04",
@@ -26,7 +28,8 @@
       "fps": 20,
       "status": "online",
       "installed_on": "2023-11-21",
-      "display_name": "Corniche Promenade"
+      "display_name": "Corniche Promenade",
+      "clip": "cam_corniche.mp4"
     },
     "downtown_01": {
       "ip_address": "10.20.15.32",
@@ -35,7 +38,8 @@
       "fps": 25,
       "status": "degraded",
       "installed_on": "2024-01-17",
-      "display_name": "Downtown Beirut"
+      "display_name": "Downtown Beirut",
+      "clip": null
     }
   }
 }

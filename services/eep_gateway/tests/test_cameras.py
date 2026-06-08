@@ -42,10 +42,25 @@ def test_list_cameras_returns_registry_devices():
     assert aub["rtsp_url"] == "rtsp://10.20.14.11:554/Streaming/Channels/101"
     assert aub["status"] == "online"
     assert aub["model"]
-    # Map + footage wiring.
+    # Map + per-camera footage wiring (registry 'clip' resolved against blob base).
     assert "lat" in aub["location"] and "lon" in aub["location"]
-    assert aub["clip_url"]  # default CCTV_CLIP_URLS provides a demo clip
+    assert aub["clip_url"].endswith("/cam_monitoring.mp4")
+    assert aub["clip_url"].startswith("http")
     assert aub["clip_available"] is True
+
+    # Each online camera maps to its own registered clip.
+    assert cameras["hamra_02"]["clip_url"].endswith("/cam_hamra.mp4")
+    assert cameras["corniche_01"]["clip_url"].endswith("/cam_corniche.mp4")
+
+
+def test_degraded_camera_has_no_clip():
+    body = client.get("/v1/cameras").json()
+    cameras = {camera["camera_id"]: camera for camera in body["cameras"]}
+
+    downtown = cameras["downtown_01"]
+    assert downtown["status"] == "degraded"
+    assert downtown["clip_url"] is None
+    assert downtown["clip_available"] is False
 
 
 def test_cameras_are_unique_per_camera_id():

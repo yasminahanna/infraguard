@@ -600,6 +600,7 @@ function App() {
         />
 
         <CameraFootagePanel
+          key={selectedCamera?.camera_id}
           camera={selectedCamera}
           onClose={closeCameraFootage}
         />
@@ -1285,7 +1286,12 @@ function EvidenceReviewPanel({ incident, evidence, isLoading, error, onClose }) 
 }
 
 function CameraFootagePanel({ camera, onClose }) {
+  const [videoFailed, setVideoFailed] = useState(false);
+
   if (!camera) return null;
+
+  const offline = camera.status && camera.status !== "online";
+  const showVideo = camera.clip_url && !videoFailed;
 
   return (
     <div className="evidence-overlay">
@@ -1300,17 +1306,27 @@ function CameraFootagePanel({ camera, onClose }) {
         </div>
 
         <div className="evidence-video-box">
-          {camera.clip_url ? (
-            <video controls autoPlay muted src={camera.clip_url}>
+          {showVideo ? (
+            <video
+              controls
+              autoPlay
+              muted
+              src={camera.clip_url}
+              onError={() => setVideoFailed(true)}
+            >
               Your browser does not support video playback.
             </video>
           ) : (
             <div className="evidence-placeholder">
-              <strong>No footage connected for this camera</strong>
+              <strong>
+                {offline ? "Camera feed unavailable" : "No footage connected"}
+              </strong>
               <p>
-                This camera is registered and mapped, but its Azure Blob clip URL is
-                not configured yet. Set <code>CCTV_CLIP_URLS</code> on the EEP to attach
-                footage.
+                {videoFailed
+                  ? "The footage URL is set but the clip could not be loaded. Confirm the clip is uploaded to the Azure Blob container."
+                  : offline
+                  ? `This camera is currently reporting status "${camera.status}", so no live footage is available.`
+                  : "This camera is registered and mapped, but no footage clip is attached yet."}
               </p>
             </div>
           )}

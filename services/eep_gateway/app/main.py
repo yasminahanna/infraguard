@@ -245,6 +245,40 @@ def get_cctv_clip_urls() -> list[str]:
     return [url.strip() for url in urls_text.split(",") if url.strip()]
 
 
+def get_cctv_blob_base_url() -> str:
+    """Base URL of the Azure Blob container holding the CCTV clips (trailing slash)."""
+    base = os.getenv(
+        "CCTV_BLOB_BASE_URL",
+        "https://igcctvzpvbm2.blob.core.windows.net/cctv-clips/",
+    )
+    return base if base.endswith("/") else base + "/"
+
+
+def resolve_camera_clip_url(camera_id: str, device: dict, fallback_clips: list[str]) -> str | None:
+    """Per-camera footage URL.
+
+    Resolution order:
+      - registry 'clip' set to a filename/URL  -> that clip (blob filename resolved
+        against CCTV_BLOB_BASE_URL),
+      - registry 'clip' explicitly null         -> no footage (e.g. a degraded camera),
+      - 'clip' key absent                        -> deterministic pick from CCTV_CLIP_URLS,
+      - nothing available                        -> None.
+    """
+    fallback_sentinel = "__use_fallback__"
+    clip = device.get("clip", fallback_sentinel)
+
+    if clip is None:
+        return None
+
+    if clip != fallback_sentinel:
+        return clip if clip.startswith("http") else get_cctv_blob_base_url() + clip
+
+    if fallback_clips:
+        return fallback_clips[sum(ord(c) for c in camera_id) % len(fallback_clips)]
+
+    return None
+
+
 def load_camera_registry() -> dict:
     """Load the CCTV device registry (camera_id -> metadata: IP, model, status...).
 
@@ -375,7 +409,7 @@ async def list_cameras(
         seen.add(camera_id)
         device = registry.get(camera_id, {})
         ip_address = device.get("ip_address")
-        clip_url = clips[sum(ord(c) for c in camera_id) % len(clips)] if clips else None
+        clip_url = resolve_camera_clip_url(camera_id, device, clips)
 
         cameras.append(
             {
