@@ -373,7 +373,9 @@ async def incident_evidence(
     if hotspot is not None:
         camera_id = hotspot.get("camera_id")
         road_segment_id = hotspot.get("road_segment_id")
-        location_name = hotspot.get("location_name", road_segment_id)
+        location_name = registry.get(camera_id, {}).get("display_name") or hotspot.get(
+            "location_name", road_segment_id
+        )
         risk_level = hotspot.get("risk_level", "unknown")
         event_type = (incident or {}).get("event_type", "traffic-risk event")
         # Same footage the camera marker shows: resolve from the parent camera's
@@ -387,6 +389,7 @@ async def incident_evidence(
     else:
         camera_id = None
         road_segment_id = None
+        location_name = None
         # No camera context (incident not in the latest report) -> demo fallback clip.
         clip_url = clips[sum(ord(c) for c in incident_id) % len(clips)] if clips else None
         explanation = (
@@ -408,6 +411,7 @@ async def incident_evidence(
         "decision_context": {
             "camera_id": camera_id,
             "road_segment_id": road_segment_id,
+            "location_name": location_name,
             "explanation": explanation,
         },
     }

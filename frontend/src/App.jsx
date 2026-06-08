@@ -887,9 +887,9 @@ function MapPanel({
                     }}
                   >
                     <Popup>
-                      <strong>📷 {hotspot.camera_id}</strong>
+                      <strong>📷 {camera.location_name || hotspot.location_name}</strong>
                       <br />
-                      {camera.location_name || hotspot.location_name}
+                      Camera: {hotspot.camera_id}
                       <br />
                       IP: {camera.ip_address || "n/a"}
                       <br />
@@ -1313,6 +1313,15 @@ function EvidenceReviewPanel({ incident, evidence, isLoading, error, onClose }) 
               </div>
 
               <div>
+                <span>Location</span>
+                <strong>
+                  {decisionContext?.location_name ||
+                    incident.location_name ||
+                    "—"}
+                </strong>
+              </div>
+
+              <div>
                 <span>Camera</span>
                 <strong>{decisionContext?.camera_id || incident.camera_id}</strong>
               </div>
@@ -1675,7 +1684,7 @@ function CameraFootagePanel({ camera, onClose }) {
         <div className="evidence-header">
           <div>
             <span>CCTV Camera Feed</span>
-            <h3>📷 {camera.camera_id}</h3>
+            <h3>📷 {camera.location_name || camera.camera_id}</h3>
           </div>
 
           <button onClick={onClose}>Close</button>
