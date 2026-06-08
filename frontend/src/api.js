@@ -73,6 +73,23 @@ export async function getCameras(accessToken) {
   }
 }
 
+export async function getReportHistory(accessToken) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/v1/reports/history`, {
+      headers: buildAuthHeaders(accessToken),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch report history.");
+    }
+
+    const data = await response.json();
+    return data.reports || [];
+  } catch {
+    return [];
+  }
+}
+
 export async function getLiveFeed(accessToken) {
   try {
     const response = await fetch(`${API_BASE_URL}/v1/live`, {

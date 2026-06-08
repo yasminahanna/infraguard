@@ -13,6 +13,7 @@ import {
   getIncidentEvidence,
   getLatestReport,
   getLiveFeed,
+  getReportHistory,
   submitFeedback,
 } from "./api";
 import { supabase, supabaseConfigMissing } from "./supabaseClient";
@@ -96,6 +97,7 @@ function App() {
   const [liveFeed, setLiveFeed] = useState(null);
   const [cameras, setCameras] = useState([]);
   const [selectedCamera, setSelectedCamera] = useState(null);
+  const [reportHistory, setReportHistory] = useState([]);
 
   useEffect(() => {
     if (supabaseConfigMissing || !supabase) {
@@ -136,6 +138,7 @@ function App() {
     if (!session) return;
 
     getCameras(session.access_token).then(setCameras);
+    getReportHistory(session.access_token).then(setReportHistory);
   }, [session]);
 
   useEffect(() => {
@@ -318,6 +321,13 @@ function App() {
             onClick={() => setActivePage("reports")}
           >
             Daily Report
+          </button>
+
+          <button
+            className={`nav-item ${activePage === "archives" ? "active" : ""}`}
+            onClick={() => setActivePage("archives")}
+          >
+            Archives
           </button>
 
           <button
@@ -562,6 +572,8 @@ function App() {
             </ReportSection>
           </section>
         )}
+
+        {activePage === "archives" && <ArchivesPanel reports={reportHistory} />}
 
         {activePage === "health" && (
           <section className="panel">
@@ -1282,6 +1294,59 @@ function EvidenceReviewPanel({ incident, evidence, isLoading, error, onClose }) 
         )}
       </aside>
     </div>
+  );
+}
+
+function ArchivesPanel({ reports }) {
+  return (
+    <section className="panel">
+      <div className="panel-header">
+        <div>
+          <h3>Report Archives</h3>
+          <p>Previously generated daily reports, newest first.</p>
+        </div>
+        <span className="source-pill">{reports.length} archived</span>
+      </div>
+
+      {reports.length === 0 ? (
+        <p className="long-report-text">
+          No archived reports yet. Each generated daily report is stored here so you
+          can review past CCTV monitoring windows.
+        </p>
+      ) : (
+        <div className="archive-list">
+          {reports.map((report, index) => (
+            <div className="mini-card archive-card" key={`${report.report_id}-${index}`}>
+              <div className="archive-card-head">
+                <strong>{report.report_id}</strong>
+                <span
+                  className={`risk-pill small ${
+                    report.using_llm_api ? "risk-low" : "risk-medium"
+                  }`}
+                >
+                  {report.using_llm_api ? "LLM" : "Fallback"}
+                </span>
+              </div>
+
+              <span className="archive-meta">
+                {formatDateTime(report.generated_at)} · {report.city}
+                {report.country ? `, ${report.country}` : ""}
+              </span>
+
+              <div className="archive-stats">
+                <span>{report.summary?.total_events_detected ?? "—"} events</span>
+                <span>{report.summary?.high_risk_segments ?? "—"} high risk</span>
+                <span>{report.hotspot_count} segments</span>
+              </div>
+
+              {report.executive_summary && (
+                <p className="archive-summary">{report.executive_summary}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

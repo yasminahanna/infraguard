@@ -328,7 +328,7 @@ async def incident_evidence(
     auth_info = await verify_supabase_admin(authorization)
 
     clips = get_cctv_clip_urls()
-    clip_url = clips[sum(ord(c) for c in incident_id) % len(clips)] if clips else None
+    registry = load_camera_registry()
 
     incident, hotspot = find_incident_in_latest_report(incident_id)
 
@@ -338,6 +338,9 @@ async def incident_evidence(
         location_name = hotspot.get("location_name", road_segment_id)
         risk_level = hotspot.get("risk_level", "unknown")
         event_type = (incident or {}).get("event_type", "traffic-risk event")
+        # Same footage the camera marker shows: resolve from the parent camera's
+        # registry clip so a dot and its camera are always consistent.
+        clip_url = resolve_camera_clip_url(camera_id, registry.get(camera_id, {}), clips)
         explanation = (
             f"Flagged as '{event_type}' on {location_name} "
             f"(hotspot risk: {risk_level}). The clip below is the sampled CCTV footage "
@@ -346,6 +349,8 @@ async def incident_evidence(
     else:
         camera_id = None
         road_segment_id = None
+        # No camera context (incident not in the latest report) -> demo fallback clip.
+        clip_url = clips[sum(ord(c) for c in incident_id) % len(clips)] if clips else None
         explanation = (
             "CCTV footage for this monitored location. The detection model samples "
             "frames from this feed to identify traffic-risk events."
@@ -434,6 +439,62 @@ async def list_cameras(
         )
 
     return {"auth": auth_info, "camera_count": len(cameras), "cameras": cameras}
+
+
+@app.get("/v1/reports/history")
+async def reports_history(
+    limit: int = 50,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict:
+    """Past generated daily reports (newest first) for the Archives view.
+
+    Reads the append-only reports_history.jsonl from the shared report volume and
+    returns a compact summary per report (the full report bodies stay in the file).
+    """
+    auth_info = await verify_supabase_admin(authorization)
+
+    history_path = Path(
+        os.getenv("REPORT_HISTORY_PATH", "sample_data/reports_history.jsonl")
+    )
+
+    reports = []
+    if history_path.exists():
+        try:
+            with history_path.open("r", encoding="utf-8") as file:
+                for line in file:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        report = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    daily = report.get("daily_report", {})
+                    reports.append(
+                        {
+                            "report_id": report.get("report_id"),
+                            "generated_at": report.get("generated_at"),
+                            "city": report.get("city"),
+                            "country": report.get("country"),
+                            "report_window": report.get("report_window"),
+                            "using_llm_api": report.get("recommender_status", {}).get(
+                                "using_llm_api"
+                            ),
+                            "summary": report.get("summary"),
+                            "hotspot_count": len(report.get("hotspots", [])),
+                            "title": daily.get("title"),
+                            "executive_summary": daily.get("executive_summary"),
+                        }
+                    )
+        except OSError:
+            reports = []
+
+    reports.reverse()  # file is append-order (oldest first) -> newest first
+    if limit and limit > 0:
+        reports = reports[:limit]
+
+    return {"auth": auth_info, "report_count": len(reports), "reports": reports}
 
 
 @app.get("/v1/live")
