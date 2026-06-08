@@ -6,11 +6,11 @@ from time import perf_counter
 from typing import Literal
 
 import httpx
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from pydantic import BaseModel, Field
-from starlette.responses import Response
+from starlette.responses import FileResponse, Response
 
 
 app = FastAPI(
@@ -254,23 +254,35 @@ def get_cctv_blob_base_url() -> str:
     return base if base.endswith("/") else base + "/"
 
 
+def camera_clip_dir() -> Path:
+    """Directory on the shared volume where admin-uploaded camera clips are stored."""
+    return Path(os.getenv("CAMERA_CLIP_DIR", "sample_data/clips"))
+
+
+def uploaded_clip_path(camera_id: str) -> Path:
+    return camera_clip_dir() / f"{camera_id}.mp4"
+
+
+def public_eep_base() -> str:
+    """Public base URL of this EEP, used to build clip URLs for uploaded videos."""
+    return os.getenv("PUBLIC_EEP_URL", "http://localhost:8000").rstrip("/")
+
+
 def resolve_camera_clip_url(camera_id: str, device: dict, fallback_clips: list[str]) -> str | None:
     """Per-camera footage URL.
 
     Resolution order:
-      - registry 'clip' set to a filename/URL  -> that clip (blob filename resolved
+      - an admin-uploaded clip on the volume        -> served by the EEP,
+      - registry 'clip' set to a filename/URL       -> that clip (blob filename resolved
         against CCTV_BLOB_BASE_URL),
-      - registry 'clip' explicitly null         -> no footage (e.g. a degraded camera),
-      - 'clip' key absent                        -> deterministic pick from CCTV_CLIP_URLS,
-      - nothing available                        -> None.
+      - otherwise (no/empty clip)                   -> deterministic pick from
+        CCTV_CLIP_URLS, so every camera and every incident still shows footage.
     """
-    fallback_sentinel = "__use_fallback__"
-    clip = device.get("clip", fallback_sentinel)
+    if uploaded_clip_path(camera_id).exists():
+        return f"{public_eep_base()}/v1/cameras/{camera_id}/clip"
 
-    if clip is None:
-        return None
-
-    if clip != fallback_sentinel:
+    clip = device.get("clip")
+    if clip:
         return clip if clip.startswith("http") else get_cctv_blob_base_url() + clip
 
     if fallback_clips:
@@ -279,24 +291,50 @@ def resolve_camera_clip_url(camera_id: str, device: dict, fallback_clips: list[s
     return None
 
 
-def load_camera_registry() -> dict:
-    """Load the CCTV device registry (camera_id -> metadata: IP, model, status...).
+BAKED_REGISTRY_PATH = Path(__file__).parent / "camera_registry.json"
 
-    This is the camera-management 'database' for the demo. It is baked into the image
-    (not on the shared report volume), so it is always available. Returns {} if missing.
+
+def registry_store_path() -> Path:
+    """Writable camera registry on the shared report volume (survives restarts).
+
+    Cameras added from the admin UI are written here; the baked-in registry is the
+    read-only seed (the 4 demo cameras).
     """
-    registry_path = Path(
-        os.getenv("CAMERA_REGISTRY_PATH", str(Path(__file__).parent / "camera_registry.json"))
-    )
+    return Path(os.getenv("CAMERA_REGISTRY_PATH", "sample_data/camera_registry.json"))
 
-    if not registry_path.exists():
+
+def _read_registry_file(path: Path) -> dict:
+    if not path.exists():
         return {}
-
     try:
-        with registry_path.open("r", encoding="utf-8") as file:
+        with path.open("r", encoding="utf-8") as file:
             return json.load(file).get("cameras", {})
     except (json.JSONDecodeError, OSError):
         return {}
+
+
+def load_camera_registry() -> dict:
+    """CCTV device registry (camera_id -> metadata: IP, model, status, clip...).
+
+    Prefers the writable store on the volume (admin-added cameras), falling back to
+    the baked-in seed when nothing has been added yet.
+    """
+    store = registry_store_path()
+    if store.exists():
+        return _read_registry_file(store)
+    return _read_registry_file(BAKED_REGISTRY_PATH)
+
+
+def save_camera_to_registry(camera_id: str, device: dict) -> None:
+    """Upsert one camera into the writable registry store (seeding it from the baked-in
+    seed on first write so the demo cameras are preserved)."""
+    store = registry_store_path()
+    cameras = _read_registry_file(store) if store.exists() else _read_registry_file(BAKED_REGISTRY_PATH)
+    cameras[camera_id] = {**cameras.get(camera_id, {}), **device}
+
+    store.parent.mkdir(parents=True, exist_ok=True)
+    with store.open("w", encoding="utf-8") as file:
+        json.dump({"cameras": cameras}, file, indent=2, ensure_ascii=False)
 
 
 def find_incident_in_latest_report(incident_id: str) -> tuple[dict | None, dict | None]:
@@ -441,60 +479,182 @@ async def list_cameras(
     return {"auth": auth_info, "camera_count": len(cameras), "cameras": cameras}
 
 
+class CameraCreate(BaseModel):
+    camera_id: str = Field(..., min_length=2, max_length=64)
+    display_name: str | None = None
+    ip_address: str | None = None
+    model: str | None = None
+    resolution: str | None = None
+    fps: int | None = None
+    status: str = "online"
+    road_segment_id: str = Field(..., min_length=2, max_length=64)
+    location_name: str | None = None
+    lat: float = Field(..., ge=-90, le=90)
+    lon: float = Field(..., ge=-180, le=180)
+
+
+@app.post("/v1/cameras")
+async def create_camera(
+    camera: CameraCreate,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict:
+    """Register or update a CCTV camera from the admin UI (writes the volume registry).
+
+    Stores both device metadata (IP/model/status) and the report context
+    (road_segment_id, location, name) used when its uploaded clip is analyzed.
+    """
+    auth_info = await verify_supabase_admin(authorization)
+    save_camera_to_registry(camera.camera_id, camera.model_dump())
+    return {"status": "saved", "camera_id": camera.camera_id, "auth": auth_info}
+
+
+@app.post("/v1/cameras/{camera_id}/clip")
+async def upload_camera_clip(
+    camera_id: str,
+    file: UploadFile = File(...),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict:
+    """Store an uploaded CCTV clip on the shared volume (served back via GET ...//clip)."""
+    auth_info = await verify_supabase_admin(authorization)
+
+    clip_dir = camera_clip_dir()
+    clip_dir.mkdir(parents=True, exist_ok=True)
+    dest = clip_dir / f"{camera_id}.mp4"
+
+    with dest.open("wb") as out:
+        while chunk := await file.read(1024 * 1024):
+            out.write(chunk)
+
+    return {
+        "status": "uploaded",
+        "camera_id": camera_id,
+        "bytes": dest.stat().st_size,
+        "auth": auth_info,
+    }
+
+
+@app.get("/v1/cameras/{camera_id}/clip")
+def serve_camera_clip(camera_id: str) -> FileResponse:
+    """Serve an admin-uploaded clip (public, like the Azure Blob clips, so <video> can load it)."""
+    path = uploaded_clip_path(camera_id)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="No uploaded clip for this camera.")
+    return FileResponse(path, media_type="video/mp4")
+
+
+@app.post("/v1/cameras/{camera_id}/analyze")
+async def analyze_camera_clip(
+    camera_id: str,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict:
+    """Run the real detection pipeline on a camera's uploaded clip and refresh the report.
+
+    Proxies to the recommender, which samples frames, calls the Detection IEP
+    (YOLO + CLIP), appends the resulting events, and regenerates the daily report so the
+    new camera appears on the map with real incidents.
+    """
+    auth_info = await verify_supabase_admin(authorization)
+
+    device = load_camera_registry().get(camera_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="Unknown camera. Register it first.")
+    if not uploaded_clip_path(camera_id).exists():
+        raise HTTPException(status_code=400, detail="No uploaded clip to analyze.")
+
+    recommender_url = os.getenv("RECOMMENDER_IEP_URL", "http://recommender-iep:8003")
+    payload = {
+        "camera_id": camera_id,
+        "road_segment_id": device.get("road_segment_id", f"segment_{camera_id}"),
+        "location_name": device.get("location_name") or device.get("display_name") or camera_id,
+        "lat": device.get("lat"),
+        "lon": device.get("lon"),
+        "clip_filename": f"{camera_id}.mp4",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=300) as client:
+            resp = await client.post(f"{recommender_url}/v1/cameras/analyze-clip", json=payload)
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Analysis failed: {exc}") from exc
+
+    return {"status": "analyzed", "camera_id": camera_id, "result": resp.json(), "auth": auth_info}
+
+
+def load_history_reports() -> list[dict]:
+    """Full stored reports, deduped to ONE per report_id (one per day), newest first."""
+    history_path = Path(
+        os.getenv("REPORT_HISTORY_PATH", "sample_data/reports_history.jsonl")
+    )
+    if not history_path.exists():
+        return []
+
+    by_id: dict[str, dict] = {}
+    order: list[str] = []
+    try:
+        with history_path.open("r", encoding="utf-8") as file:
+            for line in file:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    report = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                rid = report.get("report_id", report.get("generated_at", ""))
+                if rid not in by_id:
+                    order.append(rid)
+                by_id[rid] = report  # later line for same day wins
+    except OSError:
+        return []
+
+    return [by_id[rid] for rid in reversed(order)]
+
+
+def _report_summary(report: dict) -> dict:
+    daily = report.get("daily_report", {})
+    return {
+        "report_id": report.get("report_id"),
+        "generated_at": report.get("generated_at"),
+        "city": report.get("city"),
+        "country": report.get("country"),
+        "report_window": report.get("report_window"),
+        "using_llm_api": report.get("recommender_status", {}).get("using_llm_api"),
+        "summary": report.get("summary"),
+        "hotspot_count": len(report.get("hotspots", [])),
+        "title": daily.get("title"),
+        "executive_summary": daily.get("executive_summary"),
+    }
+
+
 @app.get("/v1/reports/history")
 async def reports_history(
     limit: int = 50,
     authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> dict:
-    """Past generated daily reports (newest first) for the Archives view.
-
-    Reads the append-only reports_history.jsonl from the shared report volume and
-    returns a compact summary per report (the full report bodies stay in the file).
-    """
+    """Past daily reports (one per day, newest first) for the Archives view."""
     auth_info = await verify_supabase_admin(authorization)
 
-    history_path = Path(
-        os.getenv("REPORT_HISTORY_PATH", "sample_data/reports_history.jsonl")
-    )
-
-    reports = []
-    if history_path.exists():
-        try:
-            with history_path.open("r", encoding="utf-8") as file:
-                for line in file:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        report = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-
-                    daily = report.get("daily_report", {})
-                    reports.append(
-                        {
-                            "report_id": report.get("report_id"),
-                            "generated_at": report.get("generated_at"),
-                            "city": report.get("city"),
-                            "country": report.get("country"),
-                            "report_window": report.get("report_window"),
-                            "using_llm_api": report.get("recommender_status", {}).get(
-                                "using_llm_api"
-                            ),
-                            "summary": report.get("summary"),
-                            "hotspot_count": len(report.get("hotspots", [])),
-                            "title": daily.get("title"),
-                            "executive_summary": daily.get("executive_summary"),
-                        }
-                    )
-        except OSError:
-            reports = []
-
-    reports.reverse()  # file is append-order (oldest first) -> newest first
+    reports = [_report_summary(r) for r in load_history_reports()]
     if limit and limit > 0:
         reports = reports[:limit]
 
     return {"auth": auth_info, "report_count": len(reports), "reports": reports}
+
+
+@app.get("/v1/reports/history/{report_id}")
+async def report_detail(
+    report_id: str,
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> dict:
+    """Full stored report (all sections) for the Archives 'click to open' view."""
+    auth_info = await verify_supabase_admin(authorization)
+
+    for report in load_history_reports():
+        if report.get("report_id") == report_id:
+            return {"auth": auth_info, "report": report}
+
+    raise HTTPException(status_code=404, detail="Report not found.")
 
 
 @app.get("/v1/live")

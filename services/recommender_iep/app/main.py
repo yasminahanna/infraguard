@@ -294,6 +294,46 @@ def generate_report() -> dict:
     }
 
 
+class AnalyzeClipRequest(BaseModel):
+    camera_id: str = Field(..., min_length=2, max_length=100)
+    road_segment_id: str = Field(..., min_length=2, max_length=100)
+    location_name: str | None = None
+    lat: float = Field(..., ge=-90, le=90)
+    lon: float = Field(..., ge=-180, le=180)
+    clip_filename: str = Field(..., min_length=1, max_length=200)
+
+
+@app.post("/v1/cameras/analyze-clip")
+def analyze_camera_clip(payload: AnalyzeClipRequest) -> dict:
+    """Run real detection on an uploaded clip, then regenerate the daily report.
+
+    Internal endpoint called by the EEP after a clip is uploaded. Samples frames,
+    detects events, appends them, and rebuilds the report so the new camera appears.
+    """
+    from app.reporter.clip_analyzer import analyze_clip
+
+    try:
+        analysis = analyze_clip(
+            camera_id=payload.camera_id,
+            road_segment_id=payload.road_segment_id,
+            location_name=payload.location_name or payload.camera_id,
+            lat=payload.lat,
+            lon=payload.lon,
+            clip_filename=payload.clip_filename,
+        )
+    except (FileNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    report = generate_daily_report()
+    return {
+        "status": "analyzed",
+        "analysis": analysis,
+        "report_id": report["report_id"],
+        "using_llm_api": report["recommender_status"]["using_llm_api"],
+        "segments": len(report["hotspots"]),
+    }
+
+
 @app.get("/v1/reports/latest")
 def latest_report() -> dict:
     store_path = os.getenv("REPORT_STORE_PATH", "/app/sample_data/daily_report_sample.json")

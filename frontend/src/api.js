@@ -90,6 +90,20 @@ export async function getReportHistory(accessToken) {
   }
 }
 
+export async function getReportDetail(accessToken, reportId) {
+  const response = await fetch(
+    `${API_BASE_URL}/v1/reports/history/${encodeURIComponent(reportId)}`,
+    { headers: buildAuthHeaders(accessToken) }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to load report.");
+  }
+
+  const data = await response.json();
+  return data.report;
+}
+
 export async function getLiveFeed(accessToken) {
   try {
     const response = await fetch(`${API_BASE_URL}/v1/live`, {
@@ -104,6 +118,55 @@ export async function getLiveFeed(accessToken) {
   } catch {
     return { status: "idle", message: "Live CCTV feed is not available." };
   }
+}
+
+export async function addCamera(accessToken, camera) {
+  const response = await fetch(`${API_BASE_URL}/v1/cameras`, {
+    method: "POST",
+    headers: {
+      ...buildAuthHeaders(accessToken),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(camera),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to register camera.");
+  }
+
+  return response.json();
+}
+
+export async function uploadCameraClip(accessToken, cameraId, file) {
+  const form = new FormData();
+  form.append("file", file);
+
+  // Note: do NOT set Content-Type — the browser sets the multipart boundary.
+  const response = await fetch(`${API_BASE_URL}/v1/cameras/${cameraId}/clip`, {
+    method: "POST",
+    headers: buildAuthHeaders(accessToken),
+    body: form,
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to upload clip.");
+  }
+
+  return response.json();
+}
+
+export async function analyzeCameraClip(accessToken, cameraId) {
+  const response = await fetch(`${API_BASE_URL}/v1/cameras/${cameraId}/analyze`, {
+    method: "POST",
+    headers: buildAuthHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}));
+    throw new Error(detail.detail || "Failed to analyze clip.");
+  }
+
+  return response.json();
 }
 
 export async function submitFeedback(accessToken, payload) {

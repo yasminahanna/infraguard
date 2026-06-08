@@ -53,14 +53,15 @@ def test_list_cameras_returns_registry_devices():
     assert cameras["corniche_01"]["clip_url"].endswith("/cam_corniche.mp4")
 
 
-def test_degraded_camera_has_no_clip():
+def test_every_camera_shows_footage():
+    # Yasmina feedback: every incident/camera should show footage. A camera with no
+    # registered clip (e.g. the degraded downtown_01) falls back to a default clip.
     body = client.get("/v1/cameras").json()
     cameras = {camera["camera_id"]: camera for camera in body["cameras"]}
 
-    downtown = cameras["downtown_01"]
-    assert downtown["status"] == "degraded"
-    assert downtown["clip_url"] is None
-    assert downtown["clip_available"] is False
+    for camera in cameras.values():
+        assert camera["clip_url"], f"{camera['camera_id']} has no clip_url"
+        assert camera["clip_available"] is True
 
 
 def test_cameras_are_unique_per_camera_id():

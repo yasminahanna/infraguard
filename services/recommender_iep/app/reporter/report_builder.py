@@ -191,6 +191,18 @@ def generate_daily_report() -> dict:
     store_path = os.getenv("REPORT_STORE_PATH", "/app/sample_data/daily_report_sample.json")
 
     data = load_events(events_path)
+
+    # Merge admin-added camera events (uploaded + analyzed via the dashboard) so newly
+    # onboarded cameras join the report alongside the seeded segments.
+    added_path = os.getenv("ADDED_EVENTS_PATH", "/app/sample_data/added_events.json")
+    if Path(added_path).exists():
+        try:
+            added = json.loads(Path(added_path).read_text(encoding="utf-8"))
+            data.setdefault("segments", {}).update(added.get("segments", {}))
+            data.setdefault("events", []).extend(added.get("events", []))
+        except (json.JSONDecodeError, OSError):
+            pass
+
     window = data.get("report_window", {"start": _now_iso(), "end": _now_iso()})
     aggregates = aggregate_segments(data)
 
@@ -251,10 +263,28 @@ def generate_daily_report() -> dict:
     with Path(store_path).open("w", encoding="utf-8") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
 
-    # Append to the report history (one JSON line per generated report).
+    # Persist to report history as ONE entry per report_id (one per day): regenerating
+    # the same day's report REPLACES the previous entry instead of stacking duplicates.
     history_path = os.getenv("REPORT_HISTORY_PATH", "/app/sample_data/reports_history.jsonl")
     Path(history_path).parent.mkdir(parents=True, exist_ok=True)
-    with Path(history_path).open("a", encoding="utf-8") as f:
-        f.write(json.dumps(report, ensure_ascii=False) + "\n")
+
+    kept: list[dict] = []
+    if Path(history_path).exists():
+        with Path(history_path).open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if entry.get("report_id") != report["report_id"]:
+                    kept.append(entry)
+    kept.append(report)
+
+    with Path(history_path).open("w", encoding="utf-8") as f:
+        for entry in kept:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
     return report

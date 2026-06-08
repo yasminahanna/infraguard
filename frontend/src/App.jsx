@@ -9,12 +9,16 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import {
+  addCamera,
+  analyzeCameraClip,
   getCameras,
   getIncidentEvidence,
   getLatestReport,
   getLiveFeed,
+  getReportDetail,
   getReportHistory,
   submitFeedback,
+  uploadCameraClip,
 } from "./api";
 import { supabase, supabaseConfigMissing } from "./supabaseClient";
 
@@ -98,6 +102,8 @@ function App() {
   const [cameras, setCameras] = useState([]);
   const [selectedCamera, setSelectedCamera] = useState(null);
   const [reportHistory, setReportHistory] = useState([]);
+  const [showAddCamera, setShowAddCamera] = useState(false);
+  const [openReport, setOpenReport] = useState(null);
 
   useEffect(() => {
     if (supabaseConfigMissing || !supabase) {
@@ -220,6 +226,32 @@ function App() {
 
   function closeCameraFootage() {
     setSelectedCamera(null);
+  }
+
+  async function openReportDetail(reportId) {
+    setOpenReport({ loading: true });
+    try {
+      const report = await getReportDetail(session.access_token, reportId);
+      setOpenReport({ loading: false, report });
+    } catch {
+      setOpenReport({ loading: false, error: "Could not load this report." });
+    }
+  }
+
+  async function refreshDashboard() {
+    const token = session.access_token;
+    const [{ report, source }, cams, history] = await Promise.all([
+      getLatestReport(token),
+      getCameras(token),
+      getReportHistory(token),
+    ]);
+    setDailyReport(report);
+    setReportSource(source);
+    setCameras(cams);
+    setReportHistory(history);
+    if (report.hotspots?.length > 0) {
+      setSelectedSegmentId(report.hotspots[0].road_segment_id);
+    }
   }
 
   async function handleLogout() {
@@ -436,6 +468,7 @@ function App() {
                 openIncidentEvidence={openIncidentEvidence}
                 openCameraFootage={openCameraFootage}
                 cameraById={cameraById}
+                onAddCamera={() => setShowAddCamera(true)}
               />
 
               <div className="side-stack">
@@ -573,7 +606,9 @@ function App() {
           </section>
         )}
 
-        {activePage === "archives" && <ArchivesPanel reports={reportHistory} />}
+        {activePage === "archives" && (
+          <ArchivesPanel reports={reportHistory} onOpen={openReportDetail} />
+        )}
 
         {activePage === "health" && (
           <section className="panel">
@@ -616,6 +651,18 @@ function App() {
           camera={selectedCamera}
           onClose={closeCameraFootage}
         />
+
+        {showAddCamera && (
+          <AddCameraModal
+            accessToken={session.access_token}
+            onClose={() => setShowAddCamera(false)}
+            onComplete={refreshDashboard}
+          />
+        )}
+
+        {openReport && (
+          <ReportDetailModal state={openReport} onClose={() => setOpenReport(null)} />
+        )}
       </main>
     </div>
   );
@@ -780,6 +827,7 @@ function MapPanel({
   openIncidentEvidence,
   openCameraFootage,
   cameraById,
+  onAddCamera,
 }) {
   return (
     <div className="map-panel panel">
@@ -791,9 +839,12 @@ function MapPanel({
             device info. Red dots are detected incidents.
           </p>
         </div>
+        <button className="add-camera-btn" onClick={onAddCamera}>
+          + Add CCTV
+        </button>
       </div>
 
-      <MapContainer center={[33.8955, 35.486]} zoom={14} className="map">
+      <MapContainer center={[13.7563, 100.5018]} zoom={13} className="map">
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -1297,13 +1348,13 @@ function EvidenceReviewPanel({ incident, evidence, isLoading, error, onClose }) 
   );
 }
 
-function ArchivesPanel({ reports }) {
+function ArchivesPanel({ reports, onOpen }) {
   return (
     <section className="panel">
       <div className="panel-header">
         <div>
           <h3>Report Archives</h3>
-          <p>Previously generated daily reports, newest first.</p>
+          <p>One report per day, newest first. Click a report to open it in full.</p>
         </div>
         <span className="source-pill">{reports.length} archived</span>
       </div>
@@ -1316,7 +1367,12 @@ function ArchivesPanel({ reports }) {
       ) : (
         <div className="archive-list">
           {reports.map((report, index) => (
-            <div className="mini-card archive-card" key={`${report.report_id}-${index}`}>
+            <button
+              type="button"
+              className="mini-card archive-card"
+              key={`${report.report_id}-${index}`}
+              onClick={() => onOpen(report.report_id)}
+            >
               <div className="archive-card-head">
                 <strong>{report.report_id}</strong>
                 <span
@@ -1342,11 +1398,266 @@ function ArchivesPanel({ reports }) {
               {report.executive_summary && (
                 <p className="archive-summary">{report.executive_summary}</p>
               )}
-            </div>
+
+              <span className="archive-open">Open full report →</span>
+            </button>
           ))}
         </div>
       )}
     </section>
+  );
+}
+
+function ReportDetailModal({ state, onClose }) {
+  const report = state.report;
+  const daily = report?.daily_report;
+
+  return (
+    <div className="evidence-overlay">
+      <aside className="evidence-panel report-detail">
+        <div className="evidence-header">
+          <div>
+            <span>Daily Report</span>
+            <h3>{report ? report.report_id : "Loading..."}</h3>
+          </div>
+          <button onClick={onClose}>Close</button>
+        </div>
+
+        {state.loading && <div className="evidence-loading">Loading report...</div>}
+        {state.error && <div className="evidence-error">{state.error}</div>}
+
+        {report && (
+          <>
+            <span className="archive-meta">
+              {formatDateTime(report.generated_at)} · {report.city}
+              {report.country ? `, ${report.country}` : ""} ·{" "}
+              {report.recommender_status?.using_llm_api ? "LLM" : "Fallback"}
+            </span>
+
+            <div className="report-grid">
+              <div className="mini-card">
+                <h4>Report Window</h4>
+                <p>
+                  <strong>Start:</strong>{" "}
+                  {formatDateTime(report.report_window?.start)}
+                </p>
+                <p>
+                  <strong>End:</strong> {formatDateTime(report.report_window?.end)}
+                </p>
+              </div>
+              <div className="mini-card">
+                <h4>City Summary</h4>
+                <p>Total events: {report.summary?.total_events_detected}</p>
+                <p>High risk: {report.summary?.high_risk_segments}</p>
+                <p>Medium risk: {report.summary?.medium_risk_segments}</p>
+                <p>Low risk: {report.summary?.low_risk_segments}</p>
+              </div>
+            </div>
+
+            {daily?.executive_summary && (
+              <ReportSection title="Executive Summary">
+                <p className="long-report-text">{daily.executive_summary}</p>
+              </ReportSection>
+            )}
+
+            {daily?.key_findings?.length > 0 && (
+              <ReportSection title="Key Findings">
+                <ul className="report-list">
+                  {daily.key_findings.map((f) => (
+                    <li key={f}>{f}</li>
+                  ))}
+                </ul>
+              </ReportSection>
+            )}
+
+            {daily?.recommended_admin_actions?.length > 0 && (
+              <ReportSection title="Recommended Admin Actions">
+                <ul className="report-list">
+                  {daily.recommended_admin_actions.map((a) => (
+                    <li key={a}>{a}</li>
+                  ))}
+                </ul>
+              </ReportSection>
+            )}
+
+            <ReportSection title="Segment Recommendations">
+              <div className="recommendation-list">
+                {(report.hotspots || []).map((h) => (
+                  <div className="mini-card" key={h.road_segment_id}>
+                    <strong>{h.location_name}</strong>
+                    <span>{h.recommendation?.primary_intervention}</span>
+                    <p>{h.recommendation?.explanation}</p>
+                  </div>
+                ))}
+              </div>
+            </ReportSection>
+          </>
+        )}
+      </aside>
+    </div>
+  );
+}
+
+function AddCameraModal({ accessToken, onClose, onComplete }) {
+  const [form, setForm] = useState({
+    camera_id: "",
+    display_name: "",
+    ip_address: "",
+    model: "",
+    road_segment_id: "",
+    location_name: "",
+    lat: "33.8938",
+    lon: "35.5018",
+  });
+  const [file, setFile] = useState(null);
+  const [step, setStep] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  function update(field, value) {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    setError("");
+
+    if (!form.camera_id.trim()) return setError("Camera ID is required.");
+    if (!file) return setError("Please choose a video clip to upload.");
+
+    const cameraId = form.camera_id.trim();
+    const segment = form.road_segment_id.trim() || `segment_${cameraId}`;
+    const camera = {
+      camera_id: cameraId,
+      display_name: form.display_name.trim() || cameraId,
+      ip_address: form.ip_address.trim() || null,
+      model: form.model.trim() || null,
+      status: "online",
+      road_segment_id: segment,
+      location_name: form.location_name.trim() || form.display_name.trim() || cameraId,
+      lat: parseFloat(form.lat),
+      lon: parseFloat(form.lon),
+    };
+
+    setBusy(true);
+    try {
+      setStep("Registering camera...");
+      await addCamera(accessToken, camera);
+
+      setStep("Uploading video clip...");
+      await uploadCameraClip(accessToken, cameraId, file);
+
+      setStep("Running detection + regenerating report (this can take a moment)...");
+      const result = await analyzeCameraClip(accessToken, cameraId);
+
+      setStep("Refreshing dashboard...");
+      await onComplete();
+
+      const a = result?.result?.analysis;
+      setStep(
+        a
+          ? `Done — analyzed ${a.frames_analyzed} frames, ${a.events_detected} events, ${a.vehicle_count} vehicles.`
+          : "Done."
+      );
+      setTimeout(onClose, 1200);
+    } catch (err) {
+      setError(err.message || "Something went wrong while onboarding the camera.");
+      setStep("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="evidence-overlay">
+      <aside className="evidence-panel">
+        <div className="evidence-header">
+          <div>
+            <span>Onboard CCTV</span>
+            <h3>Add a Camera</h3>
+          </div>
+          <button onClick={onClose} disabled={busy}>
+            Close
+          </button>
+        </div>
+
+        <p className="long-report-text">
+          Register a CCTV source and upload a clip. The detection model (YOLO + CLIP)
+          analyzes it and regenerates the report, so the camera appears on the map with
+          real incidents.
+        </p>
+
+        <form className="add-camera-form" onSubmit={submit}>
+          <label>
+            Camera ID *
+            <input
+              value={form.camera_id}
+              onChange={(e) => update("camera_id", e.target.value)}
+              placeholder="e.g. hamra_03"
+            />
+          </label>
+          <label>
+            Display name
+            <input
+              value={form.display_name}
+              onChange={(e) => update("display_name", e.target.value)}
+              placeholder="e.g. Hamra Street West"
+            />
+          </label>
+          <div className="form-row">
+            <label>
+              IP address
+              <input
+                value={form.ip_address}
+                onChange={(e) => update("ip_address", e.target.value)}
+                placeholder="10.20.14.xx"
+              />
+            </label>
+            <label>
+              Model
+              <input
+                value={form.model}
+                onChange={(e) => update("model", e.target.value)}
+                placeholder="Hikvision DS-..."
+              />
+            </label>
+          </div>
+          <div className="form-row">
+            <label>
+              Latitude
+              <input value={form.lat} onChange={(e) => update("lat", e.target.value)} />
+            </label>
+            <label>
+              Longitude
+              <input value={form.lon} onChange={(e) => update("lon", e.target.value)} />
+            </label>
+          </div>
+          <label>
+            Road segment ID
+            <input
+              value={form.road_segment_id}
+              onChange={(e) => update("road_segment_id", e.target.value)}
+              placeholder="auto: segment_<camera id>"
+            />
+          </label>
+          <label>
+            Video clip *
+            <input
+              type="file"
+              accept="video/mp4,video/*"
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+            />
+          </label>
+
+          {error && <div className="login-error">{error}</div>}
+          {step && <div className="add-camera-step">{step}</div>}
+
+          <button type="submit" className="feedback-submit" disabled={busy}>
+            {busy ? "Working..." : "Add camera & analyze"}
+          </button>
+        </form>
+      </aside>
+    </div>
   );
 }
 
