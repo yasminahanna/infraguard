@@ -40,6 +40,12 @@ function hotspotColor(riskLevel) {
   return "#22c55e";
 }
 
+function severityColors(severity) {
+  if (severity === "high") return { fill: "#ef4444", border: "#991b1b" };
+  if (severity === "medium") return { fill: "#f59e0b", border: "#b45309" };
+  return { fill: "#22c55e", border: "#15803d" };
+}
+
 function riskWeight(riskLevel) {
   if (riskLevel === "high") return 3;
   if (riskLevel === "medium") return 2;
@@ -911,10 +917,10 @@ function MapPanel({
                 <CircleMarker
                   key={incident.incident_id}
                   center={[incident.lat, incident.lon]}
-                  radius={8}
+                  radius={incident.severity === "high" ? 9 : incident.severity === "medium" ? 7 : 6}
                   pathOptions={{
-                    color: "#991b1b",
-                    fillColor: "#ef4444",
+                    color: severityColors(incident.severity).border,
+                    fillColor: severityColors(incident.severity).fill,
                     fillOpacity: 0.95,
                     weight: 2,
                   }}
@@ -1180,7 +1186,7 @@ function IncidentFeed({ incidents, setSelectedSegmentId, openIncidentEvidence })
               openIncidentEvidence(incident);
             }}
           >
-            <span className={`incident-dot ${riskClass(incident.risk_level)}`}></span>
+            <span className={`incident-dot ${riskClass(incident.severity)}`}></span>
             <div>
               <strong>{incident.event_type}</strong>
               <p>
