@@ -4,6 +4,8 @@ InfraGuard is a production-oriented AI engineering system for road safety risk a
 
 The project is built for the AI Engineering final project and emphasizes distributed service architecture, validation, QA, observability, deployment readiness, and AI lifecycle planning.
 
+> 📄 **A full project report is included in this repository** — covering architecture, software stack, deployment, testing/QA, and validation: [`InfraGuard_Report.docx`](InfraGuard_Report.docx) (formatted for hand-in) and [`InfraGuard_Report.md`](InfraGuard_Report.md) (Markdown source).
+
 ## Problem
 
 Cities and road safety teams often rely on delayed crash reports, citizen complaints, or manual inspection to identify dangerous road segments. InfraGuard aims to detect early risk signals from camera evidence and convert them into actionable infrastructure recommendations.
